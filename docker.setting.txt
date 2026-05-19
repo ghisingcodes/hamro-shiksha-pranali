@@ -1,0 +1,78 @@
+We'll run MongoDB using Docker for your **hamro-shiksha-pranali** project. Here’s how:
+
+## 🐳 Run MongoDB with Docker
+
+### 1. **Pull the MongoDB image** (if not already pulled)
+```bash
+docker pull mongodb/mongodb-community-server:latest
+```
+
+### 2. **Run MongoDB container**
+```bash
+docker run -d \
+  --name mongodb-hamro \
+  -p 27017:27017 \
+  -e MONGO_INITDB_ROOT_USERNAME=admin \
+  -e MONGO_INITDB_ROOT_PASSWORD=admin123 \
+  mongodb/mongodb-community-server:latest
+```
+
+> **Note:** The official image `mongo` is also fine. Replace with:
+> ```bash
+> docker run -d --name mongodb-hamro -p 27017:27017 mongo:latest
+> ```
+
+### 3. **Verify container is running**
+```bash
+docker ps
+```
+
+You should see `mongodb-hamro` with port `27017`.
+
+### 4. **Connect from your backend**
+Your `apps/api/.env` already points to:
+```
+MONGODB_URI=mongodb://localhost:27017/hamro-shiksha
+```
+If you used authentication, the URI becomes:
+```
+MONGODB_URI=mongodb://admin:admin123@localhost:27017/hamro-shiksha?authSource=admin
+```
+
+### 5. **Stop container when not needed**
+```bash
+docker stop mongodb-hamro
+docker rm mongodb-hamro   # removes container permanently
+```
+
+---
+
+## ✅ Optional: Use Docker Compose (recommended for development)
+
+Create a `docker-compose.yml` in your project root:
+
+```yaml
+version: '3.8'
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb-hamro
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: hamro-shiksha
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  mongodb_data:
+```
+
+Then run:
+```bash
+docker-compose up -d
+```
+
+---
+
+Now your backend will connect successfully to MongoDB. After starting the container, run `nx serve api` again – the build error should be fixed, and the API will run on `http://localhost:3333`.
