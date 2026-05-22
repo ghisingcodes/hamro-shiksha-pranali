@@ -1,11 +1,4 @@
-export interface Class {
-  _id: string;
-  name: string;
-  displayName: string;
-  grade: number;
-  periodCount: number;
-}
-
+// Academic Season
 export interface AcademicSeason {
   _id: string;
   name: string;
@@ -14,11 +7,88 @@ export interface AcademicSeason {
   isActive: boolean;
 }
 
-export interface Section {
+// Class (global)
+export interface Class {
+  _id: string;
   name: string;
-  routine: { subject: string; teacher: string }[][];
+  displayName: string;
+  grade: number;
+  periodCount: number;
 }
 
+// Student
+export interface Parent {
+  id?: string;
+  relation: string;
+  name: string;
+  phone: string;
+  email?: string;
+  occupation?: string;
+  workplace?: string;
+  monthlyIncome?: number;
+  yearlyIncome?: number;
+  education?: string;
+  contactPreference?: string;
+  isPrimary?: boolean;
+}
+
+export interface Student {
+  _id: string;
+  studentId: string;
+  name: string;
+  dateOfBirth?: string;
+  gender?: string;
+  liveWith?: string;
+  longTermHealth?: string[];
+  abnormalBehaviour?: string[];
+  mobileAccess?: string;
+  internetAccess?: string;
+  parents?: Parent[];
+  permanentAddress?: string;
+  temporaryAddress?: string;
+  sameAddress?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Academic Record
+export interface AcademicRecord {
+  _id: string;
+  studentId: Student | string;
+  seasonId: AcademicSeason | string;
+  classId: Class | string;
+  section: string;
+  rollNumber?: string;
+  status: 'active' | 'promoted' | 'failed' | 'repeated' | 'left' | 'graduated';
+  previousAcademicRecordId?: string;
+  nextAcademicRecordId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Enrollment Record
+export interface EnrollmentRecord {
+  _id: string;
+  studentId: Student | string;
+  seasonId: AcademicSeason | string;
+  classId: Class | string;
+  section: string;
+  rollNumber?: string;
+  status: 'active' | 'promoted' | 'failed' | 'repeated' | 'left' | 'graduated';
+  admissionFee: number;
+  tuitionFee: number;
+  examFee: number;
+  otherFees: number;
+  totalFees: number;
+  paidAmount: number;
+  dueAmount: number;
+  admissionDate?: string;
+  remarks?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Class Section
 export interface ClassSection {
   _id: string;
   classId: Class | string;
@@ -26,21 +96,22 @@ export interface ClassSection {
   sections: Section[];
 }
 
-export interface Student {
-  _id: string;
+export interface Section {
   name: string;
-  rollNumber: string;
-  seasonId: string;
-  classId: string;
-  section: string;
-  parentPhone?: string;
-  address?: string;
+  routine: any[][];
 }
 
-export interface Teacher {
+
+export interface Attendance {
   _id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  subjects: string[];
+  studentId: Student | string;
+  seasonId: AcademicSeason | string;
+  classId: Class | string;
+  section: string;
+  date: string;
+  status: 'present' | 'absent' | 'late' | 'half-day' | 'holiday';
+  remarks?: string;
+  markedBy?: Teacher | string;
+  createdAt?: string;
+  updatedAt?: string;
 }

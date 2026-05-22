@@ -8,19 +8,32 @@ import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 export class StudentService {
   constructor(@InjectModel(Student.name) private studentModel: Model<Student>) {}
 
+  async searchStudents(query: string) {
+    if (!query || query.length < 2) return [];
+    
+    const searchRegex = new RegExp(query, 'i');
+    return this.studentModel.find({
+      $or: [
+        { name: searchRegex },
+        { studentId: searchRegex },
+        { 'parents.phone': searchRegex },
+        { 'parents.name': searchRegex },
+      ]
+    }).limit(10).exec();
+  }
+
   async create(dto: CreateStudentDto) {
-    const student = new this.studentModel({ ...dto, seasonId: new Types.ObjectId(dto.seasonId), classId: new Types.ObjectId(dto.classId) });
+    const student = new this.studentModel(dto);
     return student.save();
   }
 
-  async findAll(seasonId?: string) {
-    const filter = seasonId ? { seasonId: new Types.ObjectId(seasonId) } : {};
-    return this.studentModel.find(filter).populate('seasonId classId').exec();
+  async findAll() {
+    return this.studentModel.find().exec();
   }
 
   async findOne(id: string) {
-    const student = await this.studentModel.findById(id).populate('seasonId classId');
-    if (!student) throw new NotFoundException();
+    const student = await this.studentModel.findById(id);
+    if (!student) throw new NotFoundException('Student not found');
     return student;
   }
 
@@ -34,5 +47,9 @@ export class StudentService {
     const result = await this.studentModel.deleteOne({ _id: id });
     if (result.deletedCount === 0) throw new NotFoundException();
     return { success: true };
+  }
+
+  async getParentChildren(phone: string) {
+    return this.studentModel.find({ 'parents.phone': phone }).exec();
   }
 }

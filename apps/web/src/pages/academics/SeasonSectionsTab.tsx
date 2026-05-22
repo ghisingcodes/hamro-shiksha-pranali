@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Select, Grid, Loader, Alert } from '@mantine/core';
 import { api } from '../../lib/api';
-import { Class, AcademicSeason, ClassSection } from '../../lib/types';
+import { Class, AcademicSeason } from '../../lib/types';
 import { ClassSectionCard } from './ClassSectionCard';
 
 interface SeasonSectionsTabProps {
@@ -20,19 +20,16 @@ export function SeasonSectionsTab({ selectedSeasonId, onSeasonChange }: SeasonSe
     queryFn: () => api.get('/academic-seasons').then(res => res.data),
   });
 
-  // Fetch class sections for each class individually using both filters
-  // We'll fetch all class sections for the season and then filter client-side
-  const { data: allClassSections, refetch, isLoading: sectionsLoading } = useQuery<ClassSection[]>({
+  const { data: allClassSections, refetch, isLoading: sectionsLoading } = useQuery<any[]>({
     queryKey: ['classSections', selectedSeasonId],
     queryFn: () => api.get(`/class-sections?seasonId=${selectedSeasonId}`).then(res => res.data),
     enabled: !!selectedSeasonId,
   });
 
-  // Helper to get sections for a specific class
   const getSectionsForClass = (classId: string) => {
     if (!allClassSections) return [];
     const cs = allClassSections.find(c => {
-      const csClassId = typeof c.classId === 'string' ? c.classId : (c.classId as any)?._id;
+      const csClassId = typeof c.classId === 'string' ? c.classId : c.classId?._id;
       return csClassId === classId;
     });
     return cs?.sections || [];

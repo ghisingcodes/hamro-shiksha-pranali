@@ -5,7 +5,11 @@ import { ClassModule } from './class/class.module';
 import { AcademicSeasonModule } from './academic-season/academic-season.module';
 import { ClassSectionModule } from './class-section/class-section.module';
 import { StudentModule } from './student/student.module';
+import { AcademicRecordModule } from './academic-record/academic-record.module';
 import { TeacherModule } from './teacher/teacher.module';
+import { EnrollmentRecordModule } from './enrollment-record/enrollment-record.module';
+import { AttendanceModule } from './attendace/attendance.module';
+
 
 @Module({
   imports: [
@@ -21,7 +25,10 @@ import { TeacherModule } from './teacher/teacher.module';
     AcademicSeasonModule,
     ClassSectionModule,
     StudentModule,
+    EnrollmentRecordModule,
+    AcademicRecordModule,
     TeacherModule,
+    AttendanceModule,
   ],
 })
 export class AppModule {}

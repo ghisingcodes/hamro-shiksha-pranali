@@ -18,6 +18,15 @@ export class ClassSectionService {
     return new this.classSectionModel(dto).save();
   }
 
+  async getSections(seasonId: string, classId: string) {
+    const cs = await this.classSectionModel.findOne({
+      seasonId: new Types.ObjectId(seasonId),
+      classId: new Types.ObjectId(classId),
+    });
+    if (!cs) return [];
+    return cs.sections.map(s => s.name);
+  }
+
   async findAll(seasonId?: string, classId?: string) {
     const filter: any = {};
     if (seasonId) filter.seasonId = { $in: [seasonId, new Types.ObjectId(seasonId)] };

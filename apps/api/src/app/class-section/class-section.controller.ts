@@ -15,6 +15,11 @@ export class ClassSectionController {
     return this.classSectionService.findAll(seasonId, classId);
   }
 
+  @Get('sections')
+  async getSections(@Query('seasonId') seasonId: string, @Query('classId') classId: string) {
+    return this.classSectionService.getSections(seasonId, classId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) { return this.classSectionService.findOne(id); }
 
