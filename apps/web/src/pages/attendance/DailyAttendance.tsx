@@ -50,7 +50,6 @@ interface AttendanceRow {
 }
 
 export function DailyAttendance() {
-  const queryClient = useQueryClient();
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
@@ -176,7 +175,7 @@ export function DailyAttendance() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [attendanceData, selectedSeasonId, selectedClassId, selectedSection]);
+  }, [attendanceData, selectedSeasonId, selectedClassId, selectedSection, hasChanges, saveAttendanceMutation]);
 
   // Load data into table
   useEffect(() => {

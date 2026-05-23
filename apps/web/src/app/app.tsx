@@ -7,6 +7,7 @@ import { TeachersPage } from '../pages/TeachersPage';
 import { TeacherSchedulePage } from '../pages/TeacherSchedulePage';
 import { StudentDetailPage } from '../pages/students/StudentDetailPage';
 import { DailyAttendance, MonthlyAttendance, StudentAttendance } from '../pages/attendance';
+import { StudentActivityPage } from '../pages/student-activity/StudentActivityPage';
 import { EnrollmentPage } from '../pages/enrollment/EnrollmentPage';
 
 function Dashboard() {
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/attendance/daily" element={<DailyAttendance />} />
           <Route path="/attendance/monthly" element={<MonthlyAttendance />} />
           <Route path="/attendance/student" element={<StudentAttendance />} />
+          <Route path="/student-activities" element={<StudentActivityPage />} />
           <Route path="/enrollment" element={<EnrollmentPage />} />
         </Routes>
       </Layout>

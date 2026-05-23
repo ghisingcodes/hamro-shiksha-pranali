@@ -9,6 +9,7 @@ import { AcademicRecordModule } from './academic-record/academic-record.module';
 import { TeacherModule } from './teacher/teacher.module';
 import { EnrollmentRecordModule } from './enrollment-record/enrollment-record.module';
 import { AttendanceModule } from './attendace/attendance.module';
+import { StudentActivityModule } from './student-activity/student-activity.module';
 
 
 @Module({
@@ -29,6 +30,7 @@ import { AttendanceModule } from './attendace/attendance.module';
     AcademicRecordModule,
     TeacherModule,
     AttendanceModule,
+    StudentActivityModule,
   ],
 })
 export class AppModule {}

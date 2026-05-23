@@ -19,6 +19,7 @@ import {
   IconReceipt,
   IconSettings,
   IconReportAnalytics,
+  IconActivity,
 } from '@tabler/icons-react';
 
 interface NavGroup {
@@ -77,6 +78,14 @@ const navGroups: NavGroup[] = [
       { to: '/attendance/daily', label: 'Daily Attendance', icon: IconChecklist, color: 'lime' },
       { to: '/attendance/monthly', label: 'Monthly Report', icon: IconCalendarMonth, color: 'indigo' },
       { to: '/attendance/student', label: 'Student Report', icon: IconUserCheck, color: 'violet' },
+    ],
+  },
+  {
+    label: 'Student Activities',
+    icon: IconActivity,
+    color: 'violet',
+    items: [
+      { to: '/student-activities', label: 'Track Activities', icon: IconActivity, color: 'violet' },
     ],
   },
   {
