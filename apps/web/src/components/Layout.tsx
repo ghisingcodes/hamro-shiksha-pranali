@@ -1,25 +1,12 @@
 import { ReactNode, useState } from 'react';
-import { AppShell, Burger, Group, Title, Text, ThemeIcon, Accordion, NavLink, Divider, ScrollArea } from '@mantine/core';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { AppShell, Burger, Group, Title, Text, ThemeIcon, Accordion, NavLink, Divider, ScrollArea, Menu, Avatar, rem } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { Link, useLocation } from 'react-router-dom';
 import { 
-  IconHome, 
-  IconSchool, 
-  IconCalendar, 
-  IconUsers, 
-  IconUser, 
-  IconClock,
-  IconChecklist,
-  IconCalendarMonth,
-  IconUserCheck,
-  IconLayoutDashboard,
-  IconBook,
-  IconChartBar,
-  IconUserPlus,
-  IconReceipt,
-  IconSettings,
-  IconReportAnalytics,
-  IconActivity,
+  IconHome, IconSchool, IconCalendar, IconUsers, IconUser, IconClock,
+  IconChecklist, IconCalendarMonth, IconUserCheck, IconLayoutDashboard,
+  IconBook, IconChartBar, IconUserPlus, IconReceipt, IconSettings,
+  IconReportAnalytics, IconLogout, IconShieldLock, IconBriefcase
 } from '@tabler/icons-react';
 
 interface NavGroup {
@@ -31,6 +18,7 @@ interface NavGroup {
     label: string;
     icon: React.ElementType;
     color: string;
+    adminOnly?: boolean;
   }[];
 }
 
@@ -59,6 +47,7 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/students', label: 'All Students', icon: IconUsers, color: 'cyan' },
       { to: '/enrollment', label: 'Student Enrollment', icon: IconUserPlus, color: 'green' },
+      { to: '/student-activities', label: 'Student Activity', icon: IconBook, color: 'teal' },
     ],
   },
   {
@@ -81,14 +70,6 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: 'Student Activities',
-    icon: IconActivity,
-    color: 'violet',
-    items: [
-      { to: '/student-activities', label: 'Track Activities', icon: IconActivity, color: 'violet' },
-    ],
-  },
-  {
     label: 'Reports',
     icon: IconReportAnalytics,
     color: 'red',
@@ -99,21 +80,22 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: 'Settings',
-    icon: IconSettings,
-    color: 'gray',
+    label: 'Administration',
+    icon: IconShieldLock,
+    color: 'violet',
     items: [
-      { to: '/settings/general', label: 'General Settings', icon: IconSettings, color: 'gray' },
-      { to: '/settings/users', label: 'User Management', icon: IconUser, color: 'gray' },
+      { to: '/users', label: 'User Management', icon: IconUsers, color: 'violet', adminOnly: true },
+      { to: '/staff', label: 'Staff Management', icon: IconBriefcase, color: 'grape', adminOnly: true },
+      { to: '/settings/general', label: 'General Settings', icon: IconSettings, color: 'gray', adminOnly: true },
     ],
   },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
-  const [opened, { toggle }] = useDisclosure();
+  const navigate = useNavigate();
   const location = useLocation();
+  const [opened, { toggle }] = useDisclosure();
   const [activeAccordion, setActiveAccordion] = useState<string | null>(() => {
-    // Auto-expand accordion based on current route
     for (const group of navGroups) {
       if (group.items.some(item => item.to === location.pathname)) {
         return group.label;
@@ -122,15 +104,27 @@ export function Layout({ children }: { children: ReactNode }) {
     return null;
   });
 
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = user.role === 'super_admin' || user.role === 'admin';
+
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate('/login');
+  };
+
+  // Filter nav items based on user role
+  const filteredNavGroups = navGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => !item.adminOnly || isAdmin),
+  })).filter(group => group.items.length > 0);
+
   return (
     <AppShell
       header={{ height: 60 }}
       navbar={{ width: 280, breakpoint: 'sm', collapsed: { mobile: !opened } }}
       padding="md"
       styles={{
-        main: {
-          backgroundColor: '#f5f7fa',
-        },
+        main: { backgroundColor: '#f5f7fa' },
       }}
     >
       <AppShell.Header>
@@ -145,9 +139,21 @@ export function Layout({ children }: { children: ReactNode }) {
             </Title>
           </Group>
           <Group visibleFrom="sm">
-            <Text size="sm" c="dimmed">
-              📚 Academic Year 2025-2026
-            </Text>
+            <Menu shadow="md" width={200} position="bottom-end">
+              <Menu.Target>
+                <Avatar radius="xl" size="sm" color="blue" style={{ cursor: 'pointer' }}>
+                  {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                </Avatar>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>{user.name || 'User'}</Menu.Label>
+                <Menu.Label c="dimmed" size="xs">{user.role || 'Role'}</Menu.Label>
+                <Divider />
+                <Menu.Item leftSection={<IconLogout size={14} />} onClick={handleLogout}>
+                  Logout
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
           </Group>
         </Group>
       </AppShell.Header>
@@ -156,24 +162,15 @@ export function Layout({ children }: { children: ReactNode }) {
         <ScrollArea style={{ height: '100%' }}>
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ flex: 1 }}>
-              {navGroups.map((group) => (
+              {filteredNavGroups.map((group) => (
                 <Accordion
                   key={group.label}
                   variant="filled"
                   value={activeAccordion}
                   onChange={setActiveAccordion}
                   styles={{
-                    item: {
-                      border: 'none',
-                      marginBottom: '4px',
-                    },
-                    control: {
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      '&:hover': {
-                        backgroundColor: '#f8f9fa',
-                      },
-                    },
+                    item: { border: 'none', marginBottom: '4px' },
+                    control: { padding: '8px 12px', borderRadius: '8px', '&:hover': { backgroundColor: '#f8f9fa' } },
                   }}
                 >
                   <Accordion.Item value={group.label}>
@@ -191,22 +188,14 @@ export function Layout({ children }: { children: ReactNode }) {
                         {group.items.map((item) => (
                           <NavLink
                             key={item.to}
-                            component={Link}
-                            to={item.to}
+                            onClick={() => navigate(item.to)}
                             label={item.label}
                             leftSection={<item.icon size={18} color={item.color} />}
                             active={location.pathname === item.to}
                             variant="light"
                             styles={{
-                              root: {
-                                borderRadius: '6px',
-                                marginBottom: '2px',
-                                padding: '6px 12px',
-                              },
-                              label: {
-                                fontSize: '13px',
-                                fontWeight: 500,
-                              },
+                              root: { borderRadius: '6px', marginBottom: '2px', padding: '6px 12px' },
+                              label: { fontSize: '13px', fontWeight: 500 },
                             }}
                           />
                         ))}
@@ -224,7 +213,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   <IconUser size={12} />
                 </ThemeIcon>
                 <Text size="xs" c="dimmed">
-                  Logged in as: Administrator
+                  Logged in as: {user.name || 'Unknown'}
                 </Text>
               </Group>
             </div>

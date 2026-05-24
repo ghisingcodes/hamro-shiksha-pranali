@@ -10,6 +10,10 @@ import { TeacherModule } from './teacher/teacher.module';
 import { EnrollmentRecordModule } from './enrollment-record/enrollment-record.module';
 import { AttendanceModule } from './attendace/attendance.module';
 import { StudentActivityModule } from './student-activity/student-activity.module';
+import { UserModule } from './user/user.module';
+import { StaffModule } from './staff/staff.module';
+import { SchoolModule } from './school/school.module';
+import { AuthModule } from './auth/auth.module';
 
 
 @Module({
@@ -22,6 +26,10 @@ import { StudentActivityModule } from './student-activity/student-activity.modul
       }),
       inject: [ConfigService],
     }),
+    SchoolModule,
+    AuthModule,
+    UserModule,
+    StaffModule,
     ClassModule,
     AcademicSeasonModule,
     ClassSectionModule,
