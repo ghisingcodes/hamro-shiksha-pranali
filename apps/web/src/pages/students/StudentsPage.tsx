@@ -1,99 +1,134 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useCallback, memo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, Modal, TextInput, Select, Group, Title, Stack, Loader, Badge, Text, Divider } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
-import { IconUserPlus, IconPlus, IconEye } from '@tabler/icons-react';
-import { createColumnHelper, useReactTable, getCoreRowModel } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { 
+  Button, Modal, TextInput, Select, Group, Title, Stack, Loader, Badge, 
+  Text, Card, Tooltip, ActionIcon, Box, Skeleton, Paper
+} from '@mantine/core';
+import { 
+  IconUserPlus, IconPlus, IconEye, IconSearch, IconPhone, 
+  IconUsers
+} from '@tabler/icons-react';
 import { api } from '../../lib/api';
-import { AcademicSeason, Student, AcademicRecord, EnrollmentRecord, Class, ClassSection } from '../../lib/types';
+import { AcademicSeason, Student, AcademicRecord, Class, ClassSection } from '../../lib/types';
 import { notifications } from '@mantine/notifications';
-import { DataTable } from '../../components/DataTable';
 import { AddStudentWizardModal } from './AddStudentWizardModal';
+import { ParentDetailsModal } from './ParentDetailsModal';
+import { StudentDetailDrawer } from './StudentDetailDrawer';
 
-function ParentDetailsModal({ parent, children, studentAddress, opened, onClose }) {
-  const childColumnHelper = createColumnHelper<any>();
-  const childColumns = [
-    childColumnHelper.accessor('studentId', { header: 'Student ID' }),
-    childColumnHelper.accessor('name', { header: 'Name' }),
-    childColumnHelper.accessor('currentClass', { header: 'Current Class' }),
-    childColumnHelper.accessor('status', { header: 'Status' }),
-  ];
-  const childTable = useReactTable({ data: children, columns: childColumns, getCoreRowModel: getCoreRowModel() });
-
+// Virtualized Row Component
+const VirtualRow = memo(({ row, style, handleParentClick, handleStudentClick, selectedSeasonId, getEnrollment }: any) => {
+  const student = row;
+  const enrollment = getEnrollment(student._id);
+  
   return (
-    <Modal opened={opened} onClose={onClose} size="lg" title="Parent / Guardian Details">
-      <Stack>
-        <div>
-          <Text fw={700}>{parent.relation}: {parent.name}</Text>
-          <Text size="sm">📞 {parent.phone}</Text>
-          <Text size="sm">✉️ {parent.email || '—'}</Text>
-          <Text size="sm">💼 {parent.occupation || '—'} at {parent.workplace || '—'}</Text>
-          <Text size="sm">💰 Monthly: {parent.monthlyIncome || '—'} / Yearly: {parent.yearlyIncome || '—'}</Text>
-          <Text size="sm">🎓 Education: {parent.education || '—'}</Text>
-          <Text size="sm">📱 Preferred contact: {parent.contactPreference || '—'}</Text>
-          <Divider my="xs" />
-          <Text fw={500}>Student's Address:</Text>
-          <Text size="sm">🏠 Permanent: {studentAddress.permanent || '—'}</Text>
-          <Text size="sm">📍 Temporary: {studentAddress.temporary || '—'}</Text>
+    <div style={style}>
+      <Paper withBorder radius="md" p="sm" mb="xs" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ minWidth: 130 }}><Text fw={500}>{student.studentId}</Text></div>
+        <div style={{ minWidth: 150 }}><Text fw={500}>{student.name}</Text></div>
+        <div style={{ minWidth: 200 }}>
+          <Stack gap={4}>
+            {student.parents?.slice(0, 2).map((p: any, idx: number) => (
+              <Group key={idx} gap={4}>
+                <Badge size="sm" variant="light">{p.relation}</Badge>
+                <Button variant="subtle" size="xs" onClick={() => handleParentClick(p, student)}>{p.name}</Button>
+                <Tooltip label={p.phone}><IconPhone size={12} color="gray" /></Tooltip>
+              </Group>
+            ))}
+            {student.parents && student.parents.length > 2 && <Text size="xs" c="dimmed">+{student.parents.length - 2} more</Text>}
+          </Stack>
         </div>
-        <Divider />
-        <Title order={5}>All Children of this Parent</Title>
-        {children.length === 0 ? <Text c="dimmed">No other children registered.</Text> : <DataTable table={childTable} />}
-      </Stack>
-    </Modal>
+        <div style={{ minWidth: 180 }}>
+          {!selectedSeasonId ? <Text c="dimmed" size="xs">Select season</Text> : !enrollment ? <Badge color="gray">Not enrolled</Badge> : <div><Badge color="blue" variant="light">{(enrollment.classId as any)?.displayName}</Badge><Text size="xs">Sec: {enrollment.section} | Roll: {enrollment.rollNumber || '—'}</Text></div>}
+        </div>
+        <div>
+          <Group gap={4}>
+            <Tooltip label="View Details"><ActionIcon variant="light" onClick={() => handleStudentClick(student)}><IconEye size={16} /></ActionIcon></Tooltip>
+            <Tooltip label="Enroll"><ActionIcon variant="light" color="green" onClick={() => {}} disabled={!selectedSeasonId}><IconPlus size={16} /></ActionIcon></Tooltip>
+          </Group>
+        </div>
+      </Paper>
+    </div>
   );
-}
+});
 
 export function StudentsPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const parentRef = useRef(null);
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
   const [parentModalOpen, setParentModalOpen] = useState(false);
   const [selectedParent, setSelectedParent] = useState<any>(null);
   const [parentChildren, setParentChildren] = useState([]);
   const [currentStudentAddress, setCurrentStudentAddress] = useState({ permanent: '', temporary: '' });
-
-  const { data: seasons } = useQuery<AcademicSeason[]>({ queryKey: ['seasons'], queryFn: () => api.get('/academic-seasons').then(res => res.data) });
-  const { data: classes } = useQuery<Class[]>({ queryKey: ['classes'], queryFn: () => api.get('/classes').then(res => res.data) });
-  const { data: students, refetch: refetchStudents } = useQuery<Student[]>({ queryKey: ['students'], queryFn: () => api.get('/students').then(res => res.data) });
-  const { data: records, refetch: refetchRecords } = useQuery<AcademicRecord[]>({
-    queryKey: ['academicRecords', selectedSeasonId],
-    queryFn: () => api.get(`/academic-records?seasonId=${selectedSeasonId}`).then(res => res.data),
-    enabled: !!selectedSeasonId,
-  });
-  const { data: classSections } = useQuery<ClassSection[]>({
-    queryKey: ['classSections', selectedSeasonId],
-    queryFn: () => api.get(`/class-sections?seasonId=${selectedSeasonId}`).then(res => res.data),
-    enabled: !!selectedSeasonId,
-  });
-
-  const [enrollOpen, { open: openEnroll, close: closeEnroll }] = useDisclosure(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Student[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [enrollForm, setEnrollForm] = useState({ classId: '', section: '', rollNumber: '' });
 
-  const getSectionsForClass = (classId: string) => {
-    if (!classSections) return [];
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const schoolId = user.schoolId;
+
+  // Queries with caching
+  const { data: seasons = [] } = useQuery<AcademicSeason[]>({
+    queryKey: ['seasons'],
+    queryFn: () => api.get('/academic-seasons').then(res => res.data),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const { data: classes = [] } = useQuery<Class[]>({
+    queryKey: ['classes'],
+    queryFn: () => api.get('/classes').then(res => res.data),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const { data: students = [], isLoading: studentsLoading, refetch: refetchStudents } = useQuery<Student[]>({
+    queryKey: ['students', schoolId],
+    queryFn: () => api.get('/students').then(res => res.data),
+    enabled: !!schoolId,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: records = [] } = useQuery<AcademicRecord[]>({
+    queryKey: ['academicRecords', selectedSeasonId],
+    queryFn: () => api.get(`/academic-records?seasonId=${selectedSeasonId}`).then(res => res.data),
+    enabled: !!selectedSeasonId,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: classSections = [] } = useQuery<ClassSection[]>({
+    queryKey: ['classSections', selectedSeasonId],
+    queryFn: () => api.get(`/class-sections?seasonId=${selectedSeasonId}`).then(res => res.data),
+    enabled: !!selectedSeasonId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const getSectionsForClass = useCallback((classId: string) => {
+    if (!classSections.length) return [];
     const cs = classSections.find(c => {
       const csClassId = typeof c.classId === 'string' ? c.classId : (c.classId as any)?._id;
       return csClassId === classId;
     });
     return cs?.sections.map(s => s.name) || [];
-  };
+  }, [classSections]);
 
   const addEnrollmentMutation = useMutation({
     mutationFn: (data: any) => api.post('/academic-records', { ...data, seasonId: selectedSeasonId }),
-    onSuccess: () => { refetchRecords(); closeEnroll(); notifications.show({ title: 'Success', message: 'Enrollment added', color: 'green' }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['academicRecords'] });
+      setEnrollOpen(false);
+      notifications.show({ title: 'Success', message: 'Enrollment added', color: 'green' });
+    },
   });
 
-  const handleEnroll = () => addEnrollmentMutation.mutate({ studentId: selectedStudentId, ...enrollForm });
+  const getEnrollment = useCallback((studentId: string) => {
+    return records.find(r => (typeof r.studentId === 'string' ? r.studentId : r.studentId._id) === studentId);
+  }, [records]);
 
-  const getEnrollment = (studentId: string) => records?.find(r => (typeof r.studentId === 'string' ? r.studentId : r.studentId._id) === studentId);
-
-  const [wizardOpen, { open: openWizard, close: closeWizard }] = useDisclosure(false);
-  const studentCount = students?.length || 0;
-
-  const handleParentClick = async (parent: any, student: Student) => {
+  const handleParentClick = useCallback(async (parent: any, student: Student) => {
     setCurrentStudentAddress({
       permanent: student.permanentAddress || '—',
       temporary: student.temporaryAddress || (student.sameAddress ? student.permanentAddress : '—'),
@@ -102,72 +137,111 @@ export function StudentsPage() {
     const enriched = res.data.map((child: any) => ({
       ...child,
       currentClass: getEnrollment(child._id) ? (getEnrollment(child._id)?.classId as any)?.displayName : 'Not enrolled',
-      status: getEnrollment(child._id)?.status || 'Not enrolled',
     }));
     setParentChildren(enriched);
     setSelectedParent(parent);
     setParentModalOpen(true);
-  };
+  }, [getEnrollment]);
 
-  const studentColumnHelper = createColumnHelper<Student>();
-  const studentColumns = [
-    studentColumnHelper.accessor('studentId', { header: 'Student ID' }),
-    studentColumnHelper.accessor('name', { header: 'Name' }),
-    studentColumnHelper.display({
-      id: 'parents',
-      header: 'Parents (Name, Relation, Contact)',
-      cell: ({ row }) => (
-        <Stack gap={4}>
-          {row.original.parents?.map((p, idx) => (
-            <Group key={idx} gap={4}>
-              <Badge>{p.relation}</Badge>
-              <Button variant="subtle" size="xs" onClick={() => handleParentClick(p, row.original)}>{p.name}</Button>
-              <Text size="xs" c="dimmed">{p.phone}</Text>
-            </Group>
-          ))}
-        </Stack>
-      ),
-    }),
-    studentColumnHelper.display({
-      id: 'enrollment',
-      header: 'Current Enrollment',
-      cell: ({ row }) => {
-        const enrollment = getEnrollment(row.original._id);
-        if (!selectedSeasonId) return 'Select season to view';
-        if (!enrollment) return 'Not enrolled';
-        return `${(enrollment.classId as any)?.displayName} - ${enrollment.section} (Roll: ${enrollment.rollNumber || '—'})`;
-      },
-    }),
-    studentColumnHelper.display({
-      id: 'actions',
-      header: 'Actions',
-      cell: ({ row }) => (
-        <Group gap="xs">
-          <Button size="xs" variant="light" onClick={() => { setSelectedStudentId(row.original._id); openEnroll(); }} disabled={!selectedSeasonId}><IconPlus size={14} /> Enroll</Button>
-          <Button size="xs" variant="subtle" onClick={() => navigate(`/students/${row.original._id}`)}><IconEye size={14} /> View Details</Button>
-        </Group>
-      ),
-    }),
-  ];
+  const handleStudentClick = useCallback((student: Student) => {
+    setSelectedStudent(student);
+    setDetailDrawerOpen(true);
+  }, []);
 
-  const studentTable = useReactTable({ data: students || [], columns: studentColumns, getCoreRowModel: getCoreRowModel() });
+  const handleSearch = useCallback(async () => {
+    if (searchQuery.length >= 2) {
+      const res = await api.get(`/students/search?q=${encodeURIComponent(searchQuery)}`);
+      setSearchResults(res.data);
+    }
+  }, [searchQuery]);
+
+  const handleEnroll = () => addEnrollmentMutation.mutate({ studentId: selectedStudentId, ...enrollForm });
+
+  // Virtualizer for large lists
+  const displayData = searchResults.length > 0 ? searchResults : students;
+  const rowVirtualizer = useVirtualizer({
+    count: displayData.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 85,
+    overscan: 5,
+  });
+
+  if (!schoolId) return <Loader />;
 
   return (
-    <Stack p="md">
+    <Stack p="md" gap="md">
       <Title order={1}>Student Management</Title>
-      <Group justify="space-between">
-        <Select label="Academic Season" placeholder="Select season" data={seasons?.map(s => ({ value: s._id, label: s.name })) || []} value={selectedSeasonId} onChange={setSelectedSeasonId} clearable style={{ width: 300 }} />
-        <Button leftSection={<IconUserPlus size={18} />} onClick={openWizard}>Add New Student</Button>
-      </Group>
-      {!students ? <Loader /> : <DataTable table={studentTable} />}
-      <AddStudentWizardModal opened={wizardOpen} onClose={closeWizard} onSuccess={(newStudentId) => { refetchStudents(); if (selectedSeasonId) { setSelectedStudentId(newStudentId); openEnroll(); } }} existingStudentCount={studentCount} />
-      <Modal opened={enrollOpen} onClose={closeEnroll} title="Enroll in Season">
-        <Select label="Class" data={classes?.map(c => ({ value: c._id, label: c.displayName })) || []} value={enrollForm.classId} onChange={(val) => { setEnrollForm({ ...enrollForm, classId: val || '', section: '' }); }} required />
-        <Select label="Section (optional)" data={getSectionsForClass(enrollForm.classId).map(sec => ({ value: sec, label: sec }))} value={enrollForm.section} onChange={(val) => setEnrollForm({ ...enrollForm, section: val || '' })} disabled={!enrollForm.classId} clearable />
-        <TextInput label="Roll Number (optional)" value={enrollForm.rollNumber} onChange={e => setEnrollForm({ ...enrollForm, rollNumber: e.target.value })} />
-        <Group justify="flex-end" mt="md"><Button onClick={handleEnroll}>Enroll</Button></Group>
-      </Modal>
-      {selectedParent && <ParentDetailsModal parent={selectedParent} children={parentChildren} studentAddress={currentStudentAddress} opened={parentModalOpen} onClose={() => setParentModalOpen(false)} />}
+      
+      {/* Filter Bar */}
+      <Card withBorder radius="md" p="sm">
+        <Group justify="space-between">
+          <Group gap="sm">
+            <TextInput placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSearch()} style={{ width: 250 }} leftSection={<IconSearch size={16} />} />
+            <Button onClick={handleSearch} variant="light" size="sm">Search</Button>
+            {(searchResults.length > 0 || searchQuery) && <Button variant="subtle" size="sm" onClick={() => { setSearchQuery(''); setSearchResults([]); }}>Clear</Button>}
+          </Group>
+          <Group gap="sm">
+            <Select placeholder="Season" data={seasons.map(s => ({ value: s._id, label: s.name }))} value={selectedSeasonId} onChange={setSelectedSeasonId} clearable style={{ width: 150 }} size="sm" />
+            <Button leftSection={<IconUserPlus size={16} />} onClick={() => setWizardOpen(true)} variant="filled" size="sm">Add</Button>
+          </Group>
+        </Group>
+      </Card>
+
+      {/* Virtualized Student List */}
+      {studentsLoading ? (
+        <Stack>
+          {[...Array(5)].map((_, i) => <Skeleton key={i} height={85} radius="md" />)}
+        </Stack>
+      ) : displayData.length === 0 ? (
+        <Card withBorder p="xl" ta="center"><Text c="dimmed">No students found</Text></Card>
+      ) : (
+        <div ref={parentRef} style={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}>
+          <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+              <div key={virtualRow.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}>
+                <VirtualRow 
+                  row={displayData[virtualRow.index]}
+                  handleParentClick={handleParentClick}
+                  handleStudentClick={handleStudentClick}
+                  selectedSeasonId={selectedSeasonId}
+                  getEnrollment={getEnrollment}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      {wizardOpen && <AddStudentWizardModal opened={wizardOpen} onClose={() => setWizardOpen(false)} onSuccess={(newStudentId) => { refetchStudents(); if (selectedSeasonId) { setSelectedStudentId(newStudentId); setEnrollOpen(true); } }} existingStudentCount={students.length} />}
+      
+      {enrollOpen && (
+        <Modal opened={enrollOpen} onClose={() => setEnrollOpen(false)} title="Enroll in Season" size="sm">
+          <Select label="Class" data={classes.map(c => ({ value: c._id, label: c.displayName }))} value={enrollForm.classId} onChange={(val) => setEnrollForm({ ...enrollForm, classId: val || '', section: '' })} required />
+          <Select label="Section" data={getSectionsForClass(enrollForm.classId).map(sec => ({ value: sec, label: sec }))} value={enrollForm.section} onChange={(val) => setEnrollForm({ ...enrollForm, section: val || '' })} disabled={!enrollForm.classId} clearable mt="md" />
+          <TextInput label="Roll Number" value={enrollForm.rollNumber} onChange={(e) => setEnrollForm({ ...enrollForm, rollNumber: e.target.value })} mt="md" />
+          <Group justify="flex-end" mt="md"><Button onClick={handleEnroll}>Enroll</Button></Group>
+        </Modal>
+      )}
+
+      {selectedParent && (
+        <ParentDetailsModal 
+          parent={selectedParent} 
+          children={parentChildren} 
+          studentAddress={currentStudentAddress} 
+          opened={parentModalOpen} 
+          onClose={() => setParentModalOpen(false)} 
+        />
+      )}
+      
+      {selectedStudent && (
+        <StudentDetailDrawer 
+          opened={detailDrawerOpen} 
+          onClose={() => setDetailDrawerOpen(false)} 
+          student={selectedStudent} 
+          selectedSeasonId={selectedSeasonId} 
+        />
+      )}
     </Stack>
   );
 }

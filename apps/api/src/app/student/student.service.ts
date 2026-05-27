@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Student } from './student.schema';
@@ -8,11 +8,12 @@ import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 export class StudentService {
   constructor(@InjectModel(Student.name) private studentModel: Model<Student>) {}
 
-  async searchStudents(query: string) {
+  async searchStudents(query: string, schoolId: string) {
     if (!query || query.length < 2) return [];
     
     const searchRegex = new RegExp(query, 'i');
     return this.studentModel.find({
+      schoolId: new Types.ObjectId(schoolId),
       $or: [
         { name: searchRegex },
         { studentId: searchRegex },
@@ -22,13 +23,25 @@ export class StudentService {
     }).limit(10).exec();
   }
 
-  async create(dto: CreateStudentDto) {
-    const student = new this.studentModel(dto);
+  async create(dto: CreateStudentDto, schoolId: string) {
+    // Generate student ID if not provided
+    let studentId = dto.studentId;
+    if (!studentId) {
+      const year = new Date().getFullYear();
+      const count = await this.studentModel.countDocuments({ schoolId: new Types.ObjectId(schoolId) });
+      studentId = `STD-${year}-${String(count + 1).padStart(5, '0')}`;
+    }
+    
+    const student = new this.studentModel({ 
+      ...dto, 
+      studentId,
+      schoolId: new Types.ObjectId(schoolId)
+    });
     return student.save();
   }
 
-  async findAll() {
-    return this.studentModel.find().exec();
+  async findAll(schoolId: string) {
+    return this.studentModel.find({ schoolId: new Types.ObjectId(schoolId) }).exec();
   }
 
   async findOne(id: string) {
@@ -49,7 +62,10 @@ export class StudentService {
     return { success: true };
   }
 
-  async getParentChildren(phone: string) {
-    return this.studentModel.find({ 'parents.phone': phone }).exec();
+  async getParentChildren(phone: string, schoolId: string) {
+    return this.studentModel.find({ 
+      schoolId: new Types.ObjectId(schoolId),
+      'parents.phone': phone 
+    }).exec();
   }
 }

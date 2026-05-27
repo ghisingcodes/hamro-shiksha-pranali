@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 @Schema({ _id: false })
 class Parent {
@@ -80,6 +80,9 @@ export class Student extends Document {
 
   @Prop({ default: false })
   sameAddress?: boolean;
+
+  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
+  schoolId: Types.ObjectId;
 }
 
 export const StudentSchema = SchemaFactory.createForClass(Student);

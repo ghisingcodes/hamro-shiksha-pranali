@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsArray, ValidateNested, IsBoolean, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray, ValidateNested, IsBoolean, IsDateString, IsMongoId } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class ParentDto {
@@ -50,10 +50,11 @@ class ParentDto {
 
 export class CreateStudentDto {
   @IsString()
-  studentId: string;
+  name: string;
 
   @IsString()
-  name: string;
+  @IsOptional()
+  studentId?: string;
 
   @IsDateString()
   @IsOptional()
@@ -105,3 +106,8 @@ export class CreateStudentDto {
 }
 
 export class UpdateStudentDto extends CreateStudentDto {}
+
+export class SearchStudentDto {
+  @IsString()
+  q: string;
+}
