@@ -20,6 +20,9 @@ export class ClassSection extends Document {
 
   @Prop({ type: [Section], default: [] })
   sections: Section[];
+
+  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
+  schoolId: Types.ObjectId;
 }
 
 export const ClassSectionSchema = SchemaFactory.createForClass(ClassSection);

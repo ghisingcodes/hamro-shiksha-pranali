@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsEnum, IsMongoId } from 'class-validator';
+import { IsString, IsEmail, IsOptional } from 'class-validator';
 
 export class SchoolSignupDto {
   // School details
@@ -42,12 +42,4 @@ export class LoginDto {
 
   @IsString()
   password: string;
-}
-
-export class ChangePasswordDto {
-  @IsString()
-  oldPassword: string;
-
-  @IsString()
-  newPassword: string;
 }

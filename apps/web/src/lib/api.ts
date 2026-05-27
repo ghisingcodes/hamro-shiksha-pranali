@@ -5,23 +5,30 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Add token to requests
+// Add token and schoolId to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
+  const schoolId = localStorage.getItem('schoolId');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // Use schoolId from localStorage or from user object
+  const finalSchoolId = schoolId || user?.schoolId;
+  if (finalSchoolId) {
+    config.headers['X-School-Id'] = finalSchoolId;
   }
   return config;
 });
 
-// Handle 401 responses
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      localStorage.removeItem('school');
+      localStorage.removeItem('schoolId');
       window.location.href = '/login';
     }
     return Promise.reject(error);

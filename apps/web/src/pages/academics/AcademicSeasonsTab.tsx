@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, Modal, TextInput, Group, Title, Checkbox, Badge, Stack } from '@mantine/core';
+import { Button, Modal, TextInput, Group, Title, Stack, Loader, Alert, Badge, Checkbox } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconCalendarPlus, IconCopy, IconEdit, IconCheck } from '@tabler/icons-react';
-import { createColumnHelper, useReactTable, getCoreRowModel } from '@tanstack/react-table';
+import { IconCalendarPlus, IconCopy, IconEdit, IconCheck, IconTrash } from '@tabler/icons-react';
+import { createColumnHelper, useReactTable, getCoreRowModel, getPaginationRowModel } from '@tanstack/react-table';
 import { api } from '../../lib/api';
 import { AcademicSeason } from '../../lib/types';
 import { notifications } from '@mantine/notifications';
@@ -17,7 +17,8 @@ export function AcademicSeasonsTab() {
   const [editingSeason, setEditingSeason] = useState<AcademicSeason | null>(null);
   const [formData, setFormData] = useState({ name: '', startDate: '', endDate: '', isActive: false });
 
-  const { data: seasons = [], isLoading } = useQuery<AcademicSeason[]>({
+  // Fetch seasons - backend automatically filters by schoolId from JWT
+  const { data: seasons = [], isLoading, refetch } = useQuery<AcademicSeason[]>({
     queryKey: ['seasons'],
     queryFn: () => api.get('/academic-seasons').then(res => res.data),
   });
@@ -30,7 +31,7 @@ export function AcademicSeasonsTab() {
       notifications.show({ title: 'Success', message: 'Season created', color: 'green' });
     },
     onError: (err: any) => {
-      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed', color: 'red' });
+      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to create season', color: 'red' });
     },
   });
 
@@ -40,6 +41,14 @@ export function AcademicSeasonsTab() {
       queryClient.invalidateQueries({ queryKey: ['seasons'] });
       closeModal();
       notifications.show({ title: 'Success', message: 'Season updated', color: 'green' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/academic-seasons/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seasons'] });
+      notifications.show({ title: 'Success', message: 'Season deleted', color: 'green' });
     },
   });
 
@@ -54,10 +63,14 @@ export function AcademicSeasonsTab() {
 
   const setActiveMutation = useMutation({
     mutationFn: async (id: string) => {
+      // First deactivate all seasons
       const all = await api.get('/academic-seasons').then(res => res.data);
       for (const s of all) {
-        if (s.isActive) await api.put(`/academic-seasons/${s._id}`, { isActive: false });
+        if (s.isActive) {
+          await api.put(`/academic-seasons/${s._id}`, { isActive: false });
+        }
       }
+      // Then activate the selected one
       return api.put(`/academic-seasons/${id}`, { isActive: true });
     },
     onSuccess: () => {
@@ -65,6 +78,37 @@ export function AcademicSeasonsTab() {
       notifications.show({ title: 'Success', message: 'Active season updated', color: 'green' });
     },
   });
+
+  const handleSubmit = () => {
+    if (!formData.name || !formData.startDate || !formData.endDate) {
+      notifications.show({ title: 'Error', message: 'Please fill all fields', color: 'red' });
+      return;
+    }
+    
+    const payload = {
+      name: formData.name,
+      startDate: new Date(formData.startDate).toISOString(),
+      endDate: new Date(formData.endDate).toISOString(),
+      isActive: formData.isActive,
+    };
+    
+    if (editingSeason) {
+      updateMutation.mutate({ id: editingSeason._id, data: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
+
+  const openEditModal = (season: AcademicSeason) => {
+    setEditingSeason(season);
+    setFormData({
+      name: season.name,
+      startDate: season.startDate.split('T')[0],
+      endDate: season.endDate.split('T')[0],
+      isActive: season.isActive,
+    });
+    openModal();
+  };
 
   const columns = useMemo(() => [
     columnHelper.accessor('name', { header: 'Name' }),
@@ -80,6 +124,7 @@ export function AcademicSeasonsTab() {
       cell: ({ row }) => (
         <Group gap="xs">
           <Button size="xs" variant="subtle" onClick={() => openEditModal(row.original)} leftSection={<IconEdit size={14} />}>Edit</Button>
+          <Button size="xs" variant="subtle" color="red" onClick={() => deleteMutation.mutate(row.original._id)} leftSection={<IconTrash size={14} />}>Delete</Button>
           <Button size="xs" variant="subtle" onClick={() => duplicateMutation.mutate({ id: row.original._id, copyClasses: true })} leftSection={<IconCopy size={14} />}>Duplicate</Button>
           {!row.original.isActive && (
             <Button size="xs" variant="light" color="blue" onClick={() => setActiveMutation.mutate(row.original._id)} leftSection={<IconCheck size={14} />}>Set Active</Button>
@@ -89,32 +134,13 @@ export function AcademicSeasonsTab() {
     }),
   ], []);
 
-  const table = useReactTable({ data: seasons, columns, getCoreRowModel: getCoreRowModel() });
-
-  const openEditModal = (season: AcademicSeason) => {
-    setEditingSeason(season);
-    setFormData({
-      name: season.name,
-      startDate: season.startDate.split('T')[0],
-      endDate: season.endDate.split('T')[0],
-      isActive: season.isActive,
-    });
-    openModal();
-  };
-
-  const handleSubmit = () => {
-    const payload = {
-      name: formData.name,
-      startDate: new Date(formData.startDate).toISOString(),
-      endDate: new Date(formData.endDate).toISOString(),
-      isActive: formData.isActive,
-    };
-    if (editingSeason) {
-      updateMutation.mutate({ id: editingSeason._id, data: payload });
-    } else {
-      createMutation.mutate(payload);
-    }
-  };
+  const table = useReactTable({
+    data: seasons,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: 10 } },
+  });
 
   return (
     <Stack>
@@ -125,16 +151,16 @@ export function AcademicSeasonsTab() {
         </Button>
       </Group>
 
-      <DataTable table={table} isLoading={isLoading} />
+      {isLoading ? <Loader /> : <DataTable table={table} />}
 
-      <Modal opened={modalOpen} onClose={closeModal} title={editingSeason ? 'Edit Season' : 'New Season'}>
+      <Modal opened={modalOpen} onClose={closeModal} title={editingSeason ? 'Edit Academic Season' : 'New Academic Season'}>
         <TextInput label="Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
         <TextInput label="Start Date" type="date" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} mt="md" required />
         <TextInput label="End Date" type="date" value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} mt="md" required />
-        <Checkbox label="Active" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.currentTarget.checked})} mt="md" />
+        <Checkbox label="Set as Active Season" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.currentTarget.checked})} mt="md" />
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={closeModal}>Cancel</Button>
-          <Button onClick={handleSubmit} loading={createMutation.isPending || updateMutation.isPending}>Save</Button>
+          <Button onClick={handleSubmit}>Save</Button>
         </Group>
       </Modal>
     </Stack>

@@ -1,3 +1,4 @@
+// apps/api/src/app/class-section/class-section.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -13,24 +14,34 @@ export class ClassSectionService {
   ) {}
 
   async create(dto: CreateClassSectionDto) {
-    const existing = await this.classSectionModel.findOne({ classId: dto.classId, seasonId: dto.seasonId });
-    if (existing) throw new BadRequestException('ClassSection already exists for this season');
-    return new this.classSectionModel(dto).save();
-  }
-
-  async getSections(seasonId: string, classId: string) {
-    const cs = await this.classSectionModel.findOne({
-      seasonId: new Types.ObjectId(seasonId),
-      classId: new Types.ObjectId(classId),
+    // Validate required fields
+    if (!dto.classId) throw new BadRequestException('classId is required');
+    if (!dto.seasonId) throw new BadRequestException('seasonId is required');
+    if (!dto.schoolId) throw new BadRequestException('schoolId is required');
+    
+    // Check if ClassSection already exists
+    const existing = await this.classSectionModel.findOne({ 
+      classId: new Types.ObjectId(dto.classId), 
+      seasonId: new Types.ObjectId(dto.seasonId),
+      schoolId: new Types.ObjectId(dto.schoolId)
     });
-    if (!cs) return [];
-    return cs.sections.map(s => s.name);
+    if (existing) throw new BadRequestException('ClassSection already exists for this season');
+    
+    // Create new ClassSection
+    const classSection = new this.classSectionModel({
+      classId: new Types.ObjectId(dto.classId),
+      seasonId: new Types.ObjectId(dto.seasonId),
+      schoolId: new Types.ObjectId(dto.schoolId),
+      sections: dto.sections || [],
+    });
+    return classSection.save();
   }
 
-  async findAll(seasonId?: string, classId?: string) {
+  async findAll(seasonId?: string, classId?: string, schoolId?: string) {
     const filter: any = {};
-    if (seasonId) filter.seasonId = { $in: [seasonId, new Types.ObjectId(seasonId)] };
-    if (classId) filter.classId = { $in: [classId, new Types.ObjectId(classId)] };
+    if (seasonId) filter.seasonId = new Types.ObjectId(seasonId);
+    if (classId) filter.classId = new Types.ObjectId(classId);
+    if (schoolId) filter.schoolId = new Types.ObjectId(schoolId);
     return this.classSectionModel.find(filter).populate('classId seasonId').exec();
   }
 
@@ -46,33 +57,27 @@ export class ClassSectionService {
     return updated;
   }
 
-  async renameSection(classSectionId: string, oldName: string, newName: string) {
-    const cs = await this.classSectionModel.findById(classSectionId);
-    if (!cs) throw new NotFoundException('ClassSection not found');
-    const section = cs.sections.find(s => s.name === oldName);
-    if (!section) throw new NotFoundException('Section not found');
-    if (cs.sections.some(s => s.name === newName)) {
-      throw new BadRequestException('Section name already exists');
-    }
-    section.name = newName;
-    await cs.save();
-    return cs;
-  }
-
-  async remove(id: string) {
-    const result = await this.classSectionModel.deleteOne({ _id: id });
+  async remove(id: string, schoolId: string) {
+    const result = await this.classSectionModel.deleteOne({ 
+      _id: id, 
+      schoolId: new Types.ObjectId(schoolId) 
+    });
     if (result.deletedCount === 0) throw new NotFoundException();
     return { success: true };
   }
 
-  async addSection(classSectionId: string, sectionName: string) {
-    const cs = await this.classSectionModel.findById(classSectionId);
-    if (!cs) throw new NotFoundException();
+  async addSection(classSectionId: string, sectionName: string, schoolId: string) {
+    const cs = await this.classSectionModel.findOne({ 
+      _id: classSectionId, 
+      schoolId: new Types.ObjectId(schoolId) 
+    });
+    if (!cs) throw new NotFoundException('ClassSection not found');
+    
     if (cs.sections.some(s => s.name === sectionName))
-      throw new BadRequestException('Section already exists');
+      throw new BadRequestException(`Section "${sectionName}" already exists`);
 
     const classDoc = await this.classModel.findById(cs.classId);
-    const periodCount = classDoc.periodCount;
+    const periodCount = classDoc?.periodCount || 5;
     const routine = Array.from({ length: 5 }, () =>
       Array.from({ length: periodCount }, () => ({ subject: '', teacher: '' }))
     );
@@ -81,54 +86,48 @@ export class ClassSectionService {
     return cs;
   }
 
-  async updateRoutine(classSectionId: string, dto: UpdateRoutineDto) {
-    const cs = await this.classSectionModel.findById(classSectionId);
-    if (!cs) throw new NotFoundException();
-    const section = cs.sections[dto.sectionIndex];
-    if (!section) throw new NotFoundException('Section not found');
-    if (!section.routine[dto.day]) section.routine[dto.day] = [];
-    section.routine[dto.day][dto.period] = { subject: dto.subject, teacher: dto.teacher };
+  async deleteSection(classSectionId: string, sectionName: string, schoolId: string) {
+    const cs = await this.classSectionModel.findOne({ 
+      _id: classSectionId, 
+      schoolId: new Types.ObjectId(schoolId) 
+    });
+    if (!cs) throw new NotFoundException('ClassSection not found');
+    
+    const sectionIndex = cs.sections.findIndex(s => s.name === sectionName);
+    if (sectionIndex === -1) throw new NotFoundException('Section not found');
+    cs.sections.splice(sectionIndex, 1);
     await cs.save();
     return cs;
   }
 
-  async getTeacherSchedule(teacherName: string) {
-    const all = await this.classSectionModel.find().populate('classId seasonId');
-    const schedule = [];
-    for (const cs of all) {
-      for (let sIdx = 0; sIdx < cs.sections.length; sIdx++) {
-        const section = cs.sections[sIdx];
-        const assignments = [];
-        for (let day = 0; day < 5; day++) {
-          const dayAssignments = [];
-          for (let period = 0; period < (cs.classId as any).periodCount; period++) {
-            const entry = section.routine[day]?.[period];
-            if (entry && entry.teacher === teacherName) {
-              dayAssignments.push({ period, subject: entry.subject });
-            }
-          }
-          assignments.push(dayAssignments);
-        }
-        if (assignments.some(day => day.length > 0)) {
-          schedule.push({
-            season: (cs.seasonId as any).name,
-            className: (cs.classId as any).displayName,
-            section: section.name,
-            assignments,
-          });
-        }
-      }
+  async renameSection(classSectionId: string, oldName: string, newName: string, schoolId: string) {
+    const cs = await this.classSectionModel.findOne({ 
+      _id: classSectionId, 
+      schoolId: new Types.ObjectId(schoolId) 
+    });
+    if (!cs) throw new NotFoundException('ClassSection not found');
+    
+    const section = cs.sections.find(s => s.name === oldName);
+    if (!section) throw new NotFoundException('Section not found');
+    if (cs.sections.some(s => s.name === newName)) {
+      throw new BadRequestException(`Section "${newName}" already exists`);
     }
-    return schedule;
+    section.name = newName;
+    await cs.save();
+    return cs;
   }
 
-
-  async deleteSection(classSectionId: string, sectionName: string) {
-    const cs = await this.classSectionModel.findById(classSectionId);
+  async updateRoutine(classSectionId: string, dto: UpdateRoutineDto, schoolId: string) {
+    const cs = await this.classSectionModel.findOne({ 
+      _id: classSectionId, 
+      schoolId: new Types.ObjectId(schoolId) 
+    });
     if (!cs) throw new NotFoundException('ClassSection not found');
-    const sectionIndex = cs.sections.findIndex(s => s.name === sectionName);
-    if (sectionIndex === -1) throw new NotFoundException('Section not found');
-    cs.sections.splice(sectionIndex, 1);
+    
+    const section = cs.sections[dto.sectionIndex];
+    if (!section) throw new NotFoundException('Section not found');
+    if (!section.routine[dto.day]) section.routine[dto.day] = [];
+    section.routine[dto.day][dto.period] = { subject: dto.subject, teacher: dto.teacher };
     await cs.save();
     return cs;
   }

@@ -1,4 +1,4 @@
-import { IsString, IsNumber, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, IsMongoId, Min, Max } from 'class-validator';
 
 export class CreateClassDto {
   @IsString()
@@ -16,4 +16,8 @@ export class CreateClassDto {
   periodCount: number;
 }
 
-export class UpdateClassDto extends CreateClassDto {}
+export class UpdateClassDto extends CreateClassDto {
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+}

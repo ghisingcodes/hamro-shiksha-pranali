@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, TextInput, Group, Stack, Box, ActionIcon } from '@mantine/core';
+import { Button, TextInput, Group, Stack, Box, ActionIcon, Text } from '@mantine/core';
 import { IconTrash, IconPlus } from '@tabler/icons-react';
 
 interface AddSectionFormProps {
@@ -66,17 +66,26 @@ export function AddSectionForm({
 
   if (!isAddingSingle && !isAddingBulk) {
     return (
-      <>
-        <Button size="xs" variant="light" onClick={onStartSingle} fullWidth mt="sm">+ Add Single Section</Button>
-        <Button size="xs" variant="outline" onClick={onStartBulk} fullWidth mt="xs">+ Bulk Add Sections</Button>
-      </>
+      <Stack gap="xs" mt="sm">
+        <Button size="xs" variant="light" onClick={onStartSingle} fullWidth leftSection={<IconPlus size={14} />}>
+          Add Single Section
+        </Button>
+        <Button size="xs" variant="outline" onClick={onStartBulk} fullWidth leftSection={<IconPlus size={14} />}>
+          Bulk Add Sections
+        </Button>
+      </Stack>
     );
   }
 
   if (isAddingSingle) {
     return (
       <Box mt="sm" p="xs" style={{ border: '1px solid #e9ecef', borderRadius: 8 }}>
-        <TextInput placeholder="Section name (e.g., A)" value={singleName} onChange={e => setSingleName(e.currentTarget.value)} size="xs" />
+        <TextInput
+          placeholder="Section name (e.g., A)"
+          value={singleName}
+          onChange={e => setSingleName(e.currentTarget.value)}
+          size="xs"
+        />
         <Group justify="flex-end" mt="xs">
           <Button size="xs" variant="subtle" onClick={onCancelSingle}>Cancel</Button>
           <Button size="xs" onClick={handleAddSingle}>Add</Button>
@@ -88,16 +97,29 @@ export function AddSectionForm({
   return (
     <Box mt="sm" p="xs" style={{ border: '1px solid #e9ecef', borderRadius: 8 }}>
       <Stack gap="xs">
+        <Text size="xs" c="dimmed">Enter section names (one per line):</Text>
         {bulkNames.map((name, idx) => (
           <Group key={idx} align="flex-end">
-            <TextInput placeholder="Section name" value={name} onChange={e => updateBulkField(idx, e.currentTarget.value)} size="xs" style={{ flex: 1 }} />
-            <ActionIcon size="sm" color="red" onClick={() => removeBulkField(idx)}><IconTrash size={14} /></ActionIcon>
+            <TextInput
+              placeholder="Section name"
+              value={name}
+              onChange={e => updateBulkField(idx, e.currentTarget.value)}
+              size="xs"
+              style={{ flex: 1 }}
+            />
+            <ActionIcon size="sm" color="red" onClick={() => removeBulkField(idx)}>
+              <IconTrash size={14} />
+            </ActionIcon>
           </Group>
         ))}
-        <Button size="xs" variant="light" onClick={addBulkField} leftSection={<IconPlus size={14} />}>Add Another</Button>
+        <Button size="xs" variant="light" onClick={addBulkField} leftSection={<IconPlus size={14} />}>
+          Add Another
+        </Button>
         <Group justify="flex-end" mt="xs">
           <Button size="xs" variant="subtle" onClick={onCancelBulk}>Cancel</Button>
-          <Button size="xs" onClick={handleAddBulk}>Add {bulkNames.filter(n => n.trim()).length} Sections</Button>
+          <Button size="xs" onClick={handleAddBulk}>
+            Add {bulkNames.filter(n => n.trim()).length} Section{bulkNames.filter(n => n.trim()).length !== 1 ? 's' : ''}
+          </Button>
         </Group>
       </Stack>
     </Box>

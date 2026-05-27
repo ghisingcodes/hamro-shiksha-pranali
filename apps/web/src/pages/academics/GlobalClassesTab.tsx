@@ -1,36 +1,44 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, Modal, TextInput, NumberInput, Group, Title, ActionIcon, Stack } from '@mantine/core';
+import { Button, Modal, TextInput, NumberInput, Group, Title, Stack, Loader, Alert, ActionIcon, Badge } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconTrash, IconEdit, IconPlus } from '@tabler/icons-react';
-import { createColumnHelper, useReactTable, getCoreRowModel } from '@tanstack/react-table';
+import { IconPlus, IconEdit, IconTrash, IconRefresh } from '@tabler/icons-react';
+import { createColumnHelper, useReactTable, getCoreRowModel, getPaginationRowModel } from '@tanstack/react-table';
 import { api } from '../../lib/api';
-import { Class } from '../../lib/types';
 import { notifications } from '@mantine/notifications';
 import { DataTable } from '../../components/DataTable';
 
-const columnHelper = createColumnHelper<Class>();
+interface Class {
+  _id: string;
+  name: string;
+  displayName: string;
+  grade: number;
+  periodCount: number;
+  isActive: boolean;
+}
 
 export function GlobalClassesTab() {
   const queryClient = useQueryClient();
-  const [createModalOpen, { open: openCreateModal, close: closeCreateModal }] = useDisclosure(false);
-  const [editModalOpen, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
-  const [newClass, setNewClass] = useState({ name: '', displayName: '', grade: 5, periodCount: 7 });
-  const [editFormData, setEditFormData] = useState({ name: '', displayName: '', grade: 5, periodCount: 7 });
+  const [modalOpen, { open: openModal, close: closeModal }] = useDisclosure(false);
+  const [editingClass, setEditingClass] = useState<Class | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    displayName: '',
+    grade: 0,
+    periodCount: 5,
+  });
 
-  const { data: classes = [], isLoading } = useQuery<Class[]>({
+  const { data: classes = [], isLoading, refetch } = useQuery<Class[]>({
     queryKey: ['classes'],
     queryFn: () => api.get('/classes').then(res => res.data),
   });
 
-  const addMutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: (data: any) => api.post('/classes', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['classes'] });
-      closeCreateModal();
-      setNewClass({ name: '', displayName: '', grade: 5, periodCount: 7 });
-      notifications.show({ title: 'Success', message: 'Class added', color: 'green' });
+      closeModal();
+      notifications.show({ title: 'Success', message: 'Class created', color: 'green' });
     },
     onError: (err: any) => {
       notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed', color: 'red' });
@@ -38,15 +46,11 @@ export function GlobalClassesTab() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Class> }) => api.put(`/classes/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => api.put(`/classes/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['classes'] });
-      closeEditModal();
-      setSelectedClass(null);
+      closeModal();
       notifications.show({ title: 'Success', message: 'Class updated', color: 'green' });
-    },
-    onError: (err: any) => {
-      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Update failed', color: 'red' });
     },
   });
 
@@ -56,26 +60,53 @@ export function GlobalClassesTab() {
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       notifications.show({ title: 'Success', message: 'Class deleted', color: 'green' });
     },
-    onError: (err: any) => {
-      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Delete failed', color: 'red' });
-    },
   });
 
+  const handleSubmit = () => {
+    if (!formData.name || !formData.displayName) {
+      notifications.show({ title: 'Error', message: 'Please fill required fields', color: 'red' });
+      return;
+    }
+    if (editingClass) {
+      updateMutation.mutate({ id: editingClass._id, data: formData });
+    } else {
+      createMutation.mutate(formData);
+    }
+  };
+
+  const openEditModal = (cls: Class) => {
+    setEditingClass(cls);
+    setFormData({
+      name: cls.name,
+      displayName: cls.displayName,
+      grade: cls.grade,
+      periodCount: cls.periodCount,
+    });
+    openModal();
+  };
+
+  const columnHelper = createColumnHelper<Class>();
   const columns = useMemo(() => [
     columnHelper.accessor('name', { header: 'Name' }),
     columnHelper.accessor('displayName', { header: 'Display Name' }),
-    columnHelper.accessor('grade', { header: 'Grade' }),
+    columnHelper.accessor('grade', { header: 'Grade', cell: info => {
+      const grade = info.getValue();
+      if (grade === 0) return 'Nursery';
+      if (grade === 1) return 'LKG';
+      if (grade === 2) return 'UKG';
+      return `Class ${grade - 2}`;
+    } }),
     columnHelper.accessor('periodCount', { header: 'Periods' }),
     columnHelper.display({
       id: 'actions',
       header: 'Actions',
       cell: ({ row }) => (
         <Group gap="xs">
-          <ActionIcon variant="subtle" color="blue" onClick={() => handleEditClick(row.original)}>
-            <IconEdit size={18} />
+          <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(row.original)}>
+            <IconEdit size={16} />
           </ActionIcon>
-          <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(row.original)}>
-            <IconTrash size={18} />
+          <ActionIcon variant="subtle" color="red" onClick={() => deleteMutation.mutate(row.original._id)}>
+            <IconTrash size={16} />
           </ActionIcon>
         </Group>
       ),
@@ -86,69 +117,34 @@ export function GlobalClassesTab() {
     data: classes,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: 10 } },
   });
 
-  const handleEditClick = (cls: Class) => {
-    setSelectedClass(cls);
-    setEditFormData({
-      name: cls.name,
-      displayName: cls.displayName,
-      grade: cls.grade,
-      periodCount: cls.periodCount,
-    });
-    openEditModal();
-  };
-
-  const handleUpdate = () => {
-    if (!selectedClass) return;
-    updateMutation.mutate({ id: selectedClass._id, data: editFormData });
-  };
-
-  const handleDelete = (cls: Class) => {
-    if (confirm(`Delete class "${cls.displayName}" permanently?`)) {
-      deleteMutation.mutate(cls._id);
-    }
-  };
-
-  const handleCreate = () => {
-    if (!newClass.name || !newClass.displayName) {
-      notifications.show({ title: 'Error', message: 'Please fill all fields', color: 'red' });
-      return;
-    }
-    addMutation.mutate(newClass);
-  };
-
   return (
-    <>
+    <Stack>
       <Group justify="space-between" mb="md">
         <Title order={3}>Global Classes</Title>
-        <Button leftSection={<IconPlus size={18} />} onClick={openCreateModal}>Add Class</Button>
+        <Group>
+          <Button variant="light" onClick={() => refetch()} leftSection={<IconRefresh size={16} />}>Refresh</Button>
+          <Button onClick={() => { setEditingClass(null); setFormData({ name: '', displayName: '', grade: 0, periodCount: 5 }); openModal(); }} leftSection={<IconPlus size={16} />}>
+            Add Class
+          </Button>
+        </Group>
       </Group>
 
-      <DataTable table={table} isLoading={isLoading} />
+      {isLoading ? <Loader /> : <DataTable table={table} />}
 
-      {/* Create Modal */}
-      <Modal opened={createModalOpen} onClose={closeCreateModal} title="Add New Class">
-        <TextInput label="Name (unique)" value={newClass.name} onChange={e => setNewClass({...newClass, name: e.target.value})} />
-        <TextInput label="Display Name" value={newClass.displayName} onChange={e => setNewClass({...newClass, displayName: e.target.value})} mt="md" />
-        <NumberInput label="Grade (0-12)" value={newClass.grade} onChange={val => setNewClass({...newClass, grade: val || 5})} mt="md" />
-        <NumberInput label="Period Count (5 or 7)" value={newClass.periodCount} onChange={val => setNewClass({...newClass, periodCount: val || 7})} mt="md" />
+      <Modal opened={modalOpen} onClose={closeModal} title={editingClass ? 'Edit Class' : 'Add Class'} size="md">
+        <TextInput label="Name (unique)" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+        <TextInput label="Display Name" value={formData.displayName} onChange={e => setFormData({...formData, displayName: e.target.value})} mt="md" required />
+        <NumberInput label="Grade (0-12)" value={formData.grade} onChange={val => setFormData({...formData, grade: val || 0})} mt="md" min={0} max={12} />
+        <NumberInput label="Period Count (5 or 7)" value={formData.periodCount} onChange={val => setFormData({...formData, periodCount: val || 5})} mt="md" min={5} max={7} />
         <Group justify="flex-end" mt="md">
-          <Button onClick={handleCreate} loading={addMutation.isPending}>Create</Button>
+          <Button variant="default" onClick={closeModal}>Cancel</Button>
+          <Button onClick={handleSubmit}>Save</Button>
         </Group>
       </Modal>
-
-      {/* Edit Modal */}
-      <Modal opened={editModalOpen} onClose={closeEditModal} title="Edit Class">
-        <TextInput label="Name" value={editFormData.name} onChange={e => setEditFormData({...editFormData, name: e.target.value})} />
-        <TextInput label="Display Name" value={editFormData.displayName} onChange={e => setEditFormData({...editFormData, displayName: e.target.value})} mt="md" />
-        <NumberInput label="Grade" value={editFormData.grade} onChange={val => setEditFormData({...editFormData, grade: val || 5})} mt="md" />
-        <NumberInput label="Period Count" value={editFormData.periodCount} onChange={val => setEditFormData({...editFormData, periodCount: val || 7})} mt="md" />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={closeEditModal}>Cancel</Button>
-          <Button onClick={handleUpdate} loading={updateMutation.isPending}>Save</Button>
-        </Group>
-      </Modal>
-    </>
+    </Stack>
   );
 }

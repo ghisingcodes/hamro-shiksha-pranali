@@ -16,6 +16,7 @@ export function LoginPage() {
     onSuccess: (res) => {
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
+      localStorage.setItem('schoolId', res.data.user.schoolId);
       if (res.data.user.schoolName) {
         localStorage.setItem('school', JSON.stringify({ name: res.data.user.schoolName, id: res.data.user.schoolId }));
       }

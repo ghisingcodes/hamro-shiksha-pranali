@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Class } from './class.schema';
 import { CreateClassDto, UpdateClassDto } from './class.dto';
 
@@ -8,38 +8,28 @@ import { CreateClassDto, UpdateClassDto } from './class.dto';
 export class ClassService {
   constructor(@InjectModel(Class.name) private classModel: Model<Class>) {}
 
-  async create(dto: CreateClassDto) {
-    try {
-      return await new this.classModel(dto).save();
-    } catch (error) {
-      if (error.code === 11000) {
-        throw new ConflictException(`Class with name "${dto.name}" already exists`);
-      }
-      throw error;
-    }
+  async create(dto: CreateClassDto, schoolId: string) {
+    const existing = await this.classModel.findOne({ name: dto.name, schoolId: new Types.ObjectId(schoolId) });
+    if (existing) throw new BadRequestException('Class already exists for this school');
+    
+    const classDoc = new this.classModel({ ...dto, schoolId: new Types.ObjectId(schoolId) });
+    return classDoc.save();
   }
 
-  async findAll() {
-    return this.classModel.find().exec();
+  async findAll(schoolId: string) {
+    return this.classModel.find({ schoolId: new Types.ObjectId(schoolId), isActive: true }).exec();
   }
 
   async findOne(id: string) {
-    const cls = await this.classModel.findById(id);
-    if (!cls) throw new NotFoundException('Class not found');
-    return cls;
+    const classDoc = await this.classModel.findById(id);
+    if (!classDoc) throw new NotFoundException('Class not found');
+    return classDoc;
   }
 
   async update(id: string, dto: UpdateClassDto) {
-    try {
-      const updated = await this.classModel.findByIdAndUpdate(id, dto, { new: true, runValidators: true });
-      if (!updated) throw new NotFoundException();
-      return updated;
-    } catch (error) {
-      if (error.code === 11000) {
-        throw new ConflictException(`Class with name "${dto.name}" already exists`);
-      }
-      throw error;
-    }
+    const updated = await this.classModel.findByIdAndUpdate(id, dto, { new: true });
+    if (!updated) throw new NotFoundException();
+    return updated;
   }
 
   async remove(id: string) {

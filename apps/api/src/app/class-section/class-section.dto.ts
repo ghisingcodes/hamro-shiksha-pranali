@@ -1,16 +1,21 @@
-import { IsString, IsMongoId, IsArray, ValidateNested, IsNumber } from 'class-validator';
+// apps/api/src/app/class-section/class-section.dto.ts
+import { IsString, IsMongoId, IsArray, ValidateNested, IsOptional, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class RoutineEntryDto {
   @IsString()
-  subject: string;
+  @IsOptional()
+  subject?: string;
+
   @IsString()
-  teacher: string;
+  @IsOptional()
+  teacher?: string;
 }
 
 class SectionDto {
   @IsString()
   name: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => RoutineEntryDto)
@@ -20,12 +25,19 @@ class SectionDto {
 export class CreateClassSectionDto {
   @IsMongoId()
   classId: string;
+
   @IsMongoId()
   seasonId: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SectionDto)
-  sections: SectionDto[];
+  @IsOptional()
+  sections?: SectionDto[];
+
+  @IsMongoId()
+  @IsOptional()
+  schoolId?: string;
 }
 
 export class AddSectionDto {

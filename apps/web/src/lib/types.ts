@@ -14,6 +14,24 @@ export interface Class {
   displayName: string;
   grade: number;
   periodCount: number;
+  isActive: boolean;
+}
+
+export interface ClassSection {
+  _id: string;
+  classId: Class | string;
+  seasonId: AcademicSeason | string;
+  sections: Section[];
+}
+
+export interface Section {
+  name: string;
+  routine: RoutineEntry[][];
+}
+
+export interface RoutineEntry {
+  subject: string;
+  teacher: string;
 }
 
 // Student
@@ -86,19 +104,6 @@ export interface EnrollmentRecord {
   remarks?: string;
   createdAt?: string;
   updatedAt?: string;
-}
-
-// Class Section
-export interface ClassSection {
-  _id: string;
-  classId: Class | string;
-  seasonId: AcademicSeason | string;
-  sections: Section[];
-}
-
-export interface Section {
-  name: string;
-  routine: any[][];
 }
 
 

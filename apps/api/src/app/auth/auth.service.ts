@@ -59,9 +59,14 @@ export class AuthService {
     });
     await adminUser.save();
 
-    // Generate token
+    // Generate token with schoolId
     const token = jwt.sign(
-      { id: adminUser._id, email: adminUser.email, role: adminUser.role, schoolId: school._id },
+      { 
+        id: adminUser._id, 
+        email: adminUser.email, 
+        role: adminUser.role, 
+        schoolId: school._id.toString() 
+      },
       this.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -73,7 +78,7 @@ export class AuthService {
         name: adminUser.name,
         email: adminUser.email,
         role: adminUser.role,
-        schoolId: school._id,
+        schoolId: school._id.toString(),
         schoolName: school.name,
       },
     };
@@ -90,8 +95,14 @@ export class AuthService {
     user.lastLogin = new Date();
     await user.save();
 
+    // Generate token with schoolId
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role, schoolId: user.schoolId?._id },
+      { 
+        id: user._id, 
+        email: user.email, 
+        role: user.role, 
+        schoolId: user.schoolId?._id?.toString() || user.schoolId?.toString() 
+      },
       this.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -103,7 +114,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
-        schoolId: user.schoolId?._id,
+        schoolId: user.schoolId?._id?.toString() || user.schoolId?.toString(),
         schoolName: user.schoolId?.name,
       },
     };

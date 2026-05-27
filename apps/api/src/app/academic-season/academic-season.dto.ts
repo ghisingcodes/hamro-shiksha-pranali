@@ -1,4 +1,4 @@
-import { IsString, IsDate, IsBoolean, IsOptional } from 'class-validator';
+import { IsString, IsDate, IsBoolean, IsOptional, IsMongoId } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateAcademicSeasonDto {
@@ -16,6 +16,10 @@ export class CreateAcademicSeasonDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsMongoId()
+  @IsOptional()
+  schoolId?: string;
 }
 
 export class DuplicateSeasonDto {
