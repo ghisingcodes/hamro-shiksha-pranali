@@ -1,5 +1,5 @@
 import { Modal, Stack, Card, Group, Avatar, Text, Badge, Divider, Grid, Title, Paper } from '@mantine/core';
-import { IconPhone, IconMail, IconBriefcase, IconMapPin, IconCurrencyRupee, IconSchool, IconDeviceMobile, IconUsers } from '@tabler/icons-react';
+import { IconPhone, IconMail, IconBriefcase, IconMapPin, IconCurrencyRupee, IconSchool, IconDeviceMobile, IconUsers, IconDroplet } from '@tabler/icons-react';
 
 interface ParentDetailsModalProps {
   parent: any;
@@ -44,6 +44,7 @@ export function ParentDetailsModal({ parent, children, studentAddress, opened, o
             <Grid.Col span={6}><Group gap="xs"><IconCurrencyRupee size={16} /><Text fw={500}>Yearly Income:</Text><Text>₹{parent.yearlyIncome?.toLocaleString() || '—'}</Text></Group></Grid.Col>
             <Grid.Col span={6}><Group gap="xs"><IconSchool size={16} /><Text fw={500}>Education:</Text><Text>{parent.education || '—'}</Text></Group></Grid.Col>
             <Grid.Col span={6}><Group gap="xs"><IconDeviceMobile size={16} /><Text fw={500}>Contact Preference:</Text><Text>{parent.contactPreference || '—'}</Text></Group></Grid.Col>
+            <Grid.Col span={6}><Group gap="xs"><IconDroplet size={16} /><Text fw={500}>Blood Group:</Text><Text>{parent.bloodGroup || '—'}</Text></Group></Grid.Col>
           </Grid>
         </Card>
 

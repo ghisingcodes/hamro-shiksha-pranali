@@ -1,3 +1,4 @@
+// apps/api/src/app/staff/staff.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 

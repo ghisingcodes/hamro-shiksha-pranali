@@ -12,6 +12,9 @@ export class StudentActivity extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Class', required: true })
   classId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
+  schoolId: Types.ObjectId;  // ← ADD THIS
+
   @Prop({ required: true })
   section: string;
 
@@ -40,7 +43,6 @@ export class StudentActivity extends Document {
 
   @Prop({ default: '' })
   classworkPhoto?: string;
-
 
   // Practical
   @Prop({ default: null })

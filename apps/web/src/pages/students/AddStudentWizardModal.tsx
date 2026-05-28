@@ -53,6 +53,17 @@ const GENDER_OPTIONS = [
   { value: 'Other', label: 'Other' },
 ];
 
+const BLOOD_GROUP_OPTIONS = [
+  { value: 'A+', label: 'A+' },
+  { value: 'A-', label: 'A-' },
+  { value: 'B+', label: 'B+' },
+  { value: 'B-', label: 'B-' },
+  { value: 'AB+', label: 'AB+' },
+  { value: 'AB-', label: 'AB-' },
+  { value: 'O+', label: 'O+' },
+  { value: 'O-', label: 'O-' },
+];
+
 const MOBILE_ACCESS_OPTIONS = [
   { value: 'Yes', label: 'Yes' },
   { value: 'Limited', label: 'Limited' },
@@ -116,6 +127,7 @@ export function AddStudentWizardModal({ opened, onClose, onSuccess, existingStud
     name: '',
     dateOfBirth: '',
     gender: '',
+    bloodGroup: '',
     liveWith: '',
     longTermHealth: [] as string[],
     abnormalBehaviour: [] as string[],
@@ -134,6 +146,7 @@ export function AddStudentWizardModal({ opened, onClose, onSuccess, existingStud
       education: '',
       contactPreference: '',
       isPrimary: false,
+      bloodGroup: '',
     }],
     permanentAddress: '',
     temporaryAddress: '',
@@ -166,6 +179,7 @@ export function AddStudentWizardModal({ opened, onClose, onSuccess, existingStud
         education: '',
         contactPreference: '',
         isPrimary: false,
+        bloodGroup: '',
       }],
     });
   };
@@ -199,6 +213,7 @@ export function AddStudentWizardModal({ opened, onClose, onSuccess, existingStud
             <TextInput label="Full Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
             <TextInput label="Date of Birth" type="date" value={form.dateOfBirth} onChange={e => setForm({...form, dateOfBirth: e.target.value})} />
             <Select label="Gender" data={GENDER_OPTIONS} value={form.gender} onChange={val => setForm({...form, gender: val || ''})} />
+            <Select label="Blood Group" data={BLOOD_GROUP_OPTIONS} value={form.bloodGroup} onChange={val => setForm({...form, bloodGroup: val || ''})} clearable />
           </Stack>
         </Stepper.Step>
 
@@ -231,6 +246,7 @@ export function AddStudentWizardModal({ opened, onClose, onSuccess, existingStud
                 <Select label="Education" data={QUALIFICATION_OPTIONS} value={p.education} onChange={val => updateParent(idx, 'education', val)} />
                 <Select label="Contact preference" data={CONTACT_PREF_OPTIONS} value={p.contactPreference} onChange={val => updateParent(idx, 'contactPreference', val)} />
                 <Checkbox label="Primary contact" checked={p.isPrimary} onChange={e => updateParent(idx, 'isPrimary', e.currentTarget.checked)} mt="sm" />
+                <Select label="Blood Group" data={BLOOD_GROUP_OPTIONS} value={p.bloodGroup} onChange={val => updateParent(idx, 'bloodGroup', val)} clearable />
               </Paper>
             ))}
             <Button onClick={addParent} leftSection={<IconPlus size={14} />}>Add Parent/Guardian</Button>

@@ -1,53 +1,5 @@
-import { 
-  IsString, 
-  IsMongoId, 
-  IsNumber, 
-  IsDate, 
-  IsOptional, 
-  IsArray, 
-  IsObject,
-  Min,
-  Max 
-} from 'class-validator';
+import { IsString, IsMongoId, IsNumber, IsDate, IsOptional, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
-
-export class RatingsDto {
-  @IsNumber()
-  @Min(-1)
-  @Max(5)
-  @IsOptional()
-  homework?: number;
-
-  @IsNumber()
-  @Min(-1)
-  @Max(5)
-  @IsOptional()
-  classwork?: number;
-
-  @IsNumber()
-  @Min(-1)
-  @Max(5)
-  @IsOptional()
-  practicalworks?: number;
-
-  @IsNumber()
-  @Min(-1)
-  @Max(5)
-  @IsOptional()
-  discipline?: number;
-
-  @IsNumber()
-  @Min(-1)
-  @Max(5)
-  @IsOptional()
-  reading?: number;
-
-  @IsNumber()
-  @Min(-1)
-  @Max(5)
-  @IsOptional()
-  writing?: number;
-}
 
 export class CreateStudentActivityDto {
   @IsMongoId()
@@ -59,19 +11,19 @@ export class CreateStudentActivityDto {
   @IsMongoId()
   classId: string;
 
+  @IsMongoId()
+  schoolId: string;  // ← ADD THIS
+
   @IsString()
   section: string;
 
   @IsNumber()
-  @Min(1)
-  @Max(7)
   period: number;
 
   @IsDate()
   @Type(() => Date)
   date: Date;
 
-  // Homework
   @IsString()
   @IsOptional()
   homeworkStatus?: string;
@@ -80,7 +32,10 @@ export class CreateStudentActivityDto {
   @IsOptional()
   homeworkIssue?: string;
 
-  // Classwork
+  @IsString()
+  @IsOptional()
+  homeworkPhoto?: string;
+
   @IsString()
   @IsOptional()
   classworkStatus?: string;
@@ -89,8 +44,10 @@ export class CreateStudentActivityDto {
   @IsOptional()
   classworkIssue?: string;
 
+  @IsString()
+  @IsOptional()
+  classworkPhoto?: string;
 
-  // Practical
   @IsString()
   @IsOptional()
   practicalStatus?: string;
@@ -99,7 +56,6 @@ export class CreateStudentActivityDto {
   @IsOptional()
   practicalIssue?: string;
 
-  // Discipline
   @IsString()
   @IsOptional()
   disciplineStatus?: string;
@@ -108,7 +64,6 @@ export class CreateStudentActivityDto {
   @IsOptional()
   disciplineIssue?: string;
 
-  // Reading
   @IsString()
   @IsOptional()
   readingStatus?: string;
@@ -117,7 +72,6 @@ export class CreateStudentActivityDto {
   @IsOptional()
   readingDifficulty?: string;
 
-  // Writing
   @IsString()
   @IsOptional()
   writingStatus?: string;
@@ -126,7 +80,6 @@ export class CreateStudentActivityDto {
   @IsOptional()
   writingPhoto?: string;
 
-  // Health
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
@@ -152,12 +105,13 @@ export class BulkStudentActivityDto {
   @IsMongoId()
   classId: string;
 
+  @IsMongoId()
+  schoolId: string;  // ← ADD THIS
+
   @IsString()
   section: string;
 
   @IsNumber()
-  @Min(1)
-  @Max(7)
   period: number;
 
   @IsDate()
@@ -169,8 +123,10 @@ export class BulkStudentActivityDto {
     studentId: string;
     homeworkStatus?: string;
     homeworkIssue?: string;
+    homeworkPhoto?: string;
     classworkStatus?: string;
     classworkIssue?: string;
+    classworkPhoto?: string;
     practicalStatus?: string;
     practicalIssue?: string;
     disciplineStatus?: string;
@@ -193,6 +149,10 @@ export class StudentActivityFilterDto {
   @IsMongoId()
   @IsOptional()
   classId?: string;
+
+  @IsMongoId()
+  @IsOptional()
+  schoolId?: string;  // ← ADD THIS
 
   @IsString()
   @IsOptional()

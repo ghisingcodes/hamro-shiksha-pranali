@@ -18,16 +18,17 @@ export class StudentActivityService {
     await this.activityModel.deleteMany({
       seasonId: new Types.ObjectId(dto.seasonId),
       classId: new Types.ObjectId(dto.classId),
+      schoolId: new Types.ObjectId(dto.schoolId),  // ← ADD THIS
       section: dto.section,
       date: dto.date,
       period: dto.period,
     });
 
-    // Insert new records
     const records = dto.activities.map(activity => ({
       studentId: new Types.ObjectId(activity.studentId),
       seasonId: new Types.ObjectId(dto.seasonId),
       classId: new Types.ObjectId(dto.classId),
+      schoolId: new Types.ObjectId(dto.schoolId),  // ← ADD THIS
       section: dto.section,
       period: dto.period,
       date: dto.date,
@@ -37,20 +38,16 @@ export class StudentActivityService {
       classworkStatus: activity.classworkStatus,
       classworkIssue: activity.classworkIssue,
       classworkPhoto: activity.classworkPhoto,
-      projectStatus: activity.projectStatus,
-      projectIssue: activity.projectIssue,
       practicalStatus: activity.practicalStatus,
       practicalIssue: activity.practicalIssue,
       disciplineStatus: activity.disciplineStatus,
       disciplineIssue: activity.disciplineIssue,
-      disciplineDetail: activity.disciplineDetail,
       readingStatus: activity.readingStatus,
       readingDifficulty: activity.readingDifficulty,
       writingStatus: activity.writingStatus,
       writingPhoto: activity.writingPhoto,
       healthProblems: activity.healthProblems || [],
       healthOther: activity.healthOther,
-      healthCause: activity.healthCause,
       remarks: activity.remarks,
     }));
     
@@ -64,6 +61,7 @@ export class StudentActivityService {
     const query: any = {};
     if (filter.seasonId) query.seasonId = new Types.ObjectId(filter.seasonId);
     if (filter.classId) query.classId = new Types.ObjectId(filter.classId);
+    if (filter.schoolId) query.schoolId = new Types.ObjectId(filter.schoolId);  // ← ADD THIS
     if (filter.section) query.section = filter.section;
     if (filter.period) query.period = filter.period;
     if (filter.studentId) query.studentId = new Types.ObjectId(filter.studentId);

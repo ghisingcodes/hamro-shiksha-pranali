@@ -38,6 +38,10 @@ class Parent {
 
   @Prop({ default: false })
   isPrimary: boolean;
+
+  // ADD BLOOD GROUP
+  @Prop()
+  bloodGroup?: string;  // A+, A-, B+, B-, AB+, AB-, O+, O-
 }
 
 @Schema({ timestamps: true })
@@ -83,6 +87,10 @@ export class Student extends Document {
 
   @Prop({ type: Types.ObjectId, ref: 'School', required: true })
   schoolId: Types.ObjectId;
+
+  // ADD BLOOD GROUP FOR STUDENT
+  @Prop()
+  bloodGroup?: string;  // A+, A-, B+, B-, AB+, AB-, O+, O-
 }
 
 export const StudentSchema = SchemaFactory.createForClass(Student);

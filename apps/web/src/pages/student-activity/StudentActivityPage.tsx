@@ -8,7 +8,7 @@ import {
 import { IconRefresh, IconSettings, IconDeviceFloppy, IconSearch } from '@tabler/icons-react';
 import { createColumnHelper, useReactTable, getCoreRowModel, getPaginationRowModel, getFilteredRowModel } from '@tanstack/react-table';
 import { api } from '../../lib/api';
-import { AcademicSeason, Class, ClassSection } from '../../lib/types';
+import { AcademicSeason, Class, ClassSection, Student } from '../../lib/types';
 import { notifications } from '@mantine/notifications';
 import { DataTable } from '../../components/DataTable';
 
@@ -27,7 +27,6 @@ const CLASSWORK_OPTIONS = [
   { value: 'not_submitted', label: '📤 Not Submitted', rating: 0, description: 'No classwork submitted' },
 ];
 
-// Common issue reasons (10 each)
 const HOMEWORK_ISSUES = [
   'Forgot at home', 'Not completed', 'No notebook', 'No pen/pencil',
   'Was absent', 'Did not understand', 'No time', 'Lost the book',
@@ -162,17 +161,15 @@ const getRating = (status: string, options: any[]) => {
   return option?.rating ?? 0;
 };
 
-// Check if a field should be included in average calculation
 const shouldIncludeInAverage = (row: ActivityRow, field: string) => {
   if (field === 'homework') {
-    // Include if status is not 'not_submitted' OR has an issue
     return row.homeworkStatus !== 'not_submitted' || (row.homeworkIssue && row.homeworkIssue.trim() !== '');
   }
   if (field === 'classwork') {
     return row.classworkStatus !== 'not_submitted' || (row.classworkIssue && row.classworkIssue.trim() !== '');
   }
   if (field === 'practical') {
-    return row.practicalStatus !== 'not_done' || (row.practicalIssue && row.practicalIssue.trim() !== '');
+    return row.practicalStatus !== 'not_done';
   }
   if (field === 'reading') {
     return row.readingStatus !== 'not_done';
@@ -186,28 +183,14 @@ const shouldIncludeInAverage = (row: ActivityRow, field: string) => {
   return false;
 };
 
-// Calculate average based on fields that have meaningful values OR issues
 const calculateAverage = (row: ActivityRow) => {
   const ratings: any = {};
-  
-  if (shouldIncludeInAverage(row, 'homework')) {
-    ratings.homework = row.homeworkRating;
-  }
-  if (shouldIncludeInAverage(row, 'classwork')) {
-    ratings.classwork = row.classworkRating;
-  }
-  if (shouldIncludeInAverage(row, 'discipline')) {
-    ratings.discipline = row.disciplineRating;
-  }
-  if (shouldIncludeInAverage(row, 'practical')) {
-    ratings.practical = row.practicalRating;
-  }
-  if (shouldIncludeInAverage(row, 'reading')) {
-    ratings.reading = row.readingRating;
-  }
-  if (shouldIncludeInAverage(row, 'writing')) {
-    ratings.writing = row.writingRating;
-  }
+  if (shouldIncludeInAverage(row, 'homework')) ratings.homework = row.homeworkRating;
+  if (shouldIncludeInAverage(row, 'classwork')) ratings.classwork = row.classworkRating;
+  if (shouldIncludeInAverage(row, 'discipline')) ratings.discipline = row.disciplineRating;
+  if (shouldIncludeInAverage(row, 'practical')) ratings.practical = row.practicalRating;
+  if (shouldIncludeInAverage(row, 'reading')) ratings.reading = row.readingRating;
+  if (shouldIncludeInAverage(row, 'writing')) ratings.writing = row.writingRating;
   
   const values = Object.values(ratings);
   if (values.length === 0) return 0;
@@ -216,12 +199,10 @@ const calculateAverage = (row: ActivityRow) => {
   return Math.round(average * 10) / 10;
 };
 
-// Check if student has any changes from default
 const hasAnyChange = (original: ActivityRow, current: ActivityRow) => {
   return JSON.stringify(original) !== JSON.stringify(current);
 };
 
-// Component for remarks input - completely isolated to prevent re-renders
 const RemarksCell = React.memo(({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
   const [localValue, setLocalValue] = useState(value);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -260,9 +241,7 @@ export function StudentActivityPage() {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
   const [activePeriod, setActivePeriod] = useState<number>(1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
-  const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString());
-  const [selectedDay, setSelectedDay] = useState(new Date().getDate().toString());
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [activityData, setActivityData] = useState<ActivityRow[]>([]);
   const [originalData, setOriginalData] = useState<ActivityRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -270,22 +249,9 @@ export function StudentActivityPage() {
   const [drawerOpened, setDrawerOpened] = useState(false);
   const [globalFilter, setGlobalFilter] = useState('');
 
-  const selectedDate = new Date(parseInt(selectedYear), parseInt(selectedMonth) - 1, parseInt(selectedDay));
-  const dayOfWeek = DAYS[selectedDate.getDay()];
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const schoolId = user.schoolId;
 
-  const getDaysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
-  const daysInMonth = getDaysInMonth(parseInt(selectedYear), parseInt(selectedMonth));
-  const dayOptions = Array.from({ length: daysInMonth }, (_, i) => ({ value: (i + 1).toString(), label: (i + 1).toString() }));
-  const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 11 }, (_, i) => ({ value: (currentYear - 5 + i).toString(), label: (currentYear - 5 + i).toString() }));
-  const monthOptions = [
-    { value: '1', label: 'January' }, { value: '2', label: 'February' }, { value: '3', label: 'March' },
-    { value: '4', label: 'April' }, { value: '5', label: 'May' }, { value: '6', label: 'June' },
-    { value: '7', label: 'July' }, { value: '8', label: 'August' }, { value: '9', label: 'September' },
-    { value: '10', label: 'October' }, { value: '11', label: 'November' }, { value: '12', label: 'December' },
-  ];
-
-  // Fetch data
   const { data: seasons } = useQuery<AcademicSeason[]>({
     queryKey: ['seasons'],
     queryFn: () => api.get('/academic-seasons').then(res => res.data),
@@ -334,7 +300,7 @@ export function StudentActivityPage() {
     return cs?.sections.map(s => ({ value: s.name, label: s.name })) || [];
   };
 
-  // Fetch academic records
+  // Fetch academic records for the selected season only
   const { data: academicRecords, isLoading: studentsLoading, refetch: refetchStudents } = useQuery<AcademicRecordPopulated[]>({
     queryKey: ['academicRecords', selectedSeasonId],
     queryFn: () => api.get(`/academic-records?seasonId=${selectedSeasonId}`).then(res => res.data),
@@ -352,12 +318,12 @@ export function StudentActivityPage() {
 
   // Fetch existing activities
   const { data: existingActivities, refetch: refetchActivities } = useQuery({
-    queryKey: ['studentActivities', selectedSeasonId, selectedClassId, selectedSection, activePeriod, selectedYear, selectedMonth, selectedDay],
+    queryKey: ['studentActivities', selectedSeasonId, selectedClassId, selectedSection, activePeriod, selectedDate],
     queryFn: () => api.get(`/student-activities?seasonId=${selectedSeasonId}&classId=${selectedClassId}&section=${selectedSection}&period=${activePeriod}&date=${selectedDate.toISOString()}`).then(res => res.data),
     enabled: !!selectedSeasonId && !!selectedClassId && !!selectedSection,
   });
 
-  // Load data into table - with DEFAULT VALUES
+  // Load data into table
   useEffect(() => {
     if (filteredRecords.length > 0) {
       const records = filteredRecords.map((record) => {
@@ -418,17 +384,10 @@ export function StudentActivityPage() {
     }
   }, [filteredRecords, existingActivities]);
 
-  // Save mutation - saves ONLY records that have changes
   const saveMutation = useMutation({
     mutationFn: async (data: ActivityRow[]) => {
-      // Only save records that have changes
-      const changedRecords = data.filter((record, index) => {
-        return hasAnyChange(originalData[index], record);
-      });
-      
-      if (changedRecords.length === 0) {
-        throw new Error('No changes to save');
-      }
+      const changedRecords = data.filter((record, index) => hasAnyChange(originalData[index], record));
+      if (changedRecords.length === 0) throw new Error('No changes to save');
       
       const activities = changedRecords.map(record => ({
         studentId: record.studentId,
@@ -447,7 +406,7 @@ export function StudentActivityPage() {
         remarks: record.remarks,
       }));
       
-      const response = await api.post('/student-activities/bulk', {
+      return api.post('/student-activities/bulk', {
         seasonId: selectedSeasonId,
         classId: selectedClassId,
         section: selectedSection,
@@ -455,7 +414,6 @@ export function StudentActivityPage() {
         date: selectedDate,
         activities,
       });
-      return response.data;
     },
     onSuccess: () => {
       setIsSaving(false);
@@ -472,9 +430,7 @@ export function StudentActivityPage() {
     },
   });
 
-  const hasChanges = () => {
-    return activityData.some((record, index) => hasAnyChange(originalData[index], record));
-  };
+  const hasChanges = () => activityData.some((record, index) => hasAnyChange(originalData[index], record));
 
   const handleSave = () => {
     if (!selectedSeasonId || !selectedClassId || !selectedSection) {
@@ -492,32 +448,14 @@ export function StudentActivityPage() {
   const updateField = useCallback((studentId: string, field: string, value: any) => {
     setActivityData(prev => prev.map(student => {
       if (student.studentId !== studentId) return student;
-      
       const updated = { ...student, [field]: value };
-      
-      // Update ratings based on status changes
-      if (field === 'homeworkStatus') {
-        updated.homeworkRating = getRating(value, HOMEWORK_OPTIONS);
-      }
-      if (field === 'classworkStatus') {
-        updated.classworkRating = getRating(value, CLASSWORK_OPTIONS);
-      }
-      if (field === 'disciplineStatus') {
-        updated.disciplineRating = getRating(value, DISCIPLINE_OPTIONS);
-      }
-      if (field === 'practicalStatus') {
-        updated.practicalRating = getRating(value, PRACTICAL_OPTIONS);
-      }
-      if (field === 'readingStatus') {
-        updated.readingRating = getRating(value, READING_OPTIONS);
-      }
-      if (field === 'writingStatus') {
-        updated.writingRating = getRating(value, WRITING_OPTIONS);
-      }
-      
-      // Recalculate average
+      if (field === 'homeworkStatus') updated.homeworkRating = getRating(value, HOMEWORK_OPTIONS);
+      if (field === 'classworkStatus') updated.classworkRating = getRating(value, CLASSWORK_OPTIONS);
+      if (field === 'disciplineStatus') updated.disciplineRating = getRating(value, DISCIPLINE_OPTIONS);
+      if (field === 'practicalStatus') updated.practicalRating = getRating(value, PRACTICAL_OPTIONS);
+      if (field === 'readingStatus') updated.readingRating = getRating(value, READING_OPTIONS);
+      if (field === 'writingStatus') updated.writingRating = getRating(value, WRITING_OPTIONS);
       updated.averageMarks = calculateAverage(updated);
-      
       return updated;
     }));
   }, []);
@@ -540,8 +478,8 @@ export function StudentActivityPage() {
   };
 
   const periodTabs = Array.from({ length: periodCount }, (_, i) => i + 1);
+  const dayOfWeek = DAYS[selectedDate.getDay()];
 
-  // Filter data for search
   const filteredData = useMemo(() => {
     if (!globalFilter) return activityData;
     const searchTerm = globalFilter.toLowerCase();
@@ -568,24 +506,9 @@ export function StudentActivityPage() {
         size: 220,
         cell: ({ row }) => (
           <Stack gap={4}>
-            <Select
-              value={row.original.homeworkStatus}
-              onChange={(val) => updateField(row.original.studentId, 'homeworkStatus', val)}
-              data={HOMEWORK_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-              size="xs"
-              styles={{ input: { fontSize: '12px' } }}
-            />
+            <Select value={row.original.homeworkStatus} onChange={(val) => updateField(row.original.studentId, 'homeworkStatus', val)} data={HOMEWORK_OPTIONS} size="xs" />
             {row.original.homeworkStatus !== 'complete' && (
-              <Select
-                value={row.original.homeworkIssue}
-                onChange={(val) => updateField(row.original.studentId, 'homeworkIssue', val)}
-                data={HOMEWORK_ISSUES.map(issue => ({ value: issue, label: issue }))}
-                size="xs"
-                placeholder="Issue"
-                searchable
-                clearable
-                styles={{ input: { fontSize: '12px' } }}
-              />
+              <Select value={row.original.homeworkIssue} onChange={(val) => updateField(row.original.studentId, 'homeworkIssue', val)} data={HOMEWORK_ISSUES} size="xs" placeholder="Issue" searchable clearable />
             )}
           </Stack>
         ),
@@ -597,16 +520,7 @@ export function StudentActivityPage() {
         header: 'Homework Issue',
         size: 180,
         cell: ({ row }) => (
-          <Select
-            value={row.original.homeworkIssue}
-            onChange={(val) => updateField(row.original.studentId, 'homeworkIssue', val)}
-            data={HOMEWORK_ISSUES.map(issue => ({ value: issue, label: issue }))}
-            size="xs"
-            placeholder="Issue"
-            searchable
-            clearable
-            styles={{ input: { fontSize: '12px' } }}
-          />
+          <Select value={row.original.homeworkIssue} onChange={(val) => updateField(row.original.studentId, 'homeworkIssue', val)} data={HOMEWORK_ISSUES} size="xs" placeholder="Issue" searchable clearable />
         ),
       }));
     }
@@ -617,24 +531,9 @@ export function StudentActivityPage() {
         size: 220,
         cell: ({ row }) => (
           <Stack gap={4}>
-            <Select
-              value={row.original.classworkStatus}
-              onChange={(val) => updateField(row.original.studentId, 'classworkStatus', val)}
-              data={CLASSWORK_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-              size="xs"
-              styles={{ input: { fontSize: '12px' } }}
-            />
+            <Select value={row.original.classworkStatus} onChange={(val) => updateField(row.original.studentId, 'classworkStatus', val)} data={CLASSWORK_OPTIONS} size="xs" />
             {row.original.classworkStatus !== 'complete' && (
-              <Select
-                value={row.original.classworkIssue}
-                onChange={(val) => updateField(row.original.studentId, 'classworkIssue', val)}
-                data={CLASSWORK_ISSUES.map(issue => ({ value: issue, label: issue }))}
-                size="xs"
-                placeholder="Issue"
-                searchable
-                clearable
-                styles={{ input: { fontSize: '12px' } }}
-              />
+              <Select value={row.original.classworkIssue} onChange={(val) => updateField(row.original.studentId, 'classworkIssue', val)} data={CLASSWORK_ISSUES} size="xs" placeholder="Issue" searchable clearable />
             )}
           </Stack>
         ),
@@ -646,16 +545,7 @@ export function StudentActivityPage() {
         header: 'Classwork Issue',
         size: 180,
         cell: ({ row }) => (
-          <Select
-            value={row.original.classworkIssue}
-            onChange={(val) => updateField(row.original.studentId, 'classworkIssue', val)}
-            data={CLASSWORK_ISSUES.map(issue => ({ value: issue, label: issue }))}
-            size="xs"
-            placeholder="Issue"
-            searchable
-            clearable
-            styles={{ input: { fontSize: '12px' } }}
-          />
+          <Select value={row.original.classworkIssue} onChange={(val) => updateField(row.original.studentId, 'classworkIssue', val)} data={CLASSWORK_ISSUES} size="xs" placeholder="Issue" searchable clearable />
         ),
       }));
     }
@@ -666,23 +556,9 @@ export function StudentActivityPage() {
         size: 200,
         cell: ({ row }) => (
           <Stack gap={4}>
-            <Select
-              value={row.original.disciplineStatus}
-              onChange={(val) => updateField(row.original.studentId, 'disciplineStatus', val)}
-              data={DISCIPLINE_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-              size="xs"
-              styles={{ input: { fontSize: '12px' } }}
-            />
+            <Select value={row.original.disciplineStatus} onChange={(val) => updateField(row.original.studentId, 'disciplineStatus', val)} data={DISCIPLINE_OPTIONS} size="xs" />
             {row.original.disciplineStatus !== 'good' && (
-              <Select
-                value={row.original.disciplineIssue}
-                onChange={(val) => updateField(row.original.studentId, 'disciplineIssue', val)}
-                data={DISCIPLINE_ISSUES.map(issue => ({ value: issue, label: issue }))}
-                size="xs"
-                placeholder="Issue"
-                searchable
-                styles={{ input: { fontSize: '12px' } }}
-              />
+              <Select value={row.original.disciplineIssue} onChange={(val) => updateField(row.original.studentId, 'disciplineIssue', val)} data={DISCIPLINE_ISSUES} size="xs" placeholder="Issue" searchable />
             )}
           </Stack>
         ),
@@ -694,15 +570,7 @@ export function StudentActivityPage() {
         header: 'Discipline Issue',
         size: 180,
         cell: ({ row }) => (
-          <Select
-            value={row.original.disciplineIssue}
-            onChange={(val) => updateField(row.original.studentId, 'disciplineIssue', val)}
-            data={DISCIPLINE_ISSUES.map(issue => ({ value: issue, label: issue }))}
-            size="xs"
-            placeholder="Issue"
-            searchable
-            styles={{ input: { fontSize: '12px' } }}
-          />
+          <Select value={row.original.disciplineIssue} onChange={(val) => updateField(row.original.studentId, 'disciplineIssue', val)} data={DISCIPLINE_ISSUES} size="xs" placeholder="Issue" searchable />
         ),
       }));
     }
@@ -713,23 +581,9 @@ export function StudentActivityPage() {
         size: 200,
         cell: ({ row }) => (
           <Stack gap={4}>
-            <Select
-              value={row.original.healthStatus}
-              onChange={(val) => updateField(row.original.studentId, 'healthStatus', val)}
-              data={HEALTH_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-              size="xs"
-              styles={{ input: { fontSize: '12px' } }}
-            />
+            <Select value={row.original.healthStatus} onChange={(val) => updateField(row.original.studentId, 'healthStatus', val)} data={HEALTH_OPTIONS} size="xs" />
             {row.original.healthStatus !== 'good' && (
-              <MultiSelect
-                value={row.original.healthProblems}
-                onChange={(val) => updateField(row.original.studentId, 'healthProblems', val)}
-                data={HEALTH_PROBLEMS.map(p => ({ value: p, label: p }))}
-                size="xs"
-                placeholder="Problems"
-                clearable
-                styles={{ input: { fontSize: '12px' } }}
-              />
+              <MultiSelect value={row.original.healthProblems} onChange={(val) => updateField(row.original.studentId, 'healthProblems', val)} data={HEALTH_PROBLEMS} size="xs" placeholder="Problems" clearable />
             )}
           </Stack>
         ),
@@ -741,15 +595,7 @@ export function StudentActivityPage() {
         header: 'Health Problems',
         size: 200,
         cell: ({ row }) => (
-          <MultiSelect
-            value={row.original.healthProblems}
-            onChange={(val) => updateField(row.original.studentId, 'healthProblems', val)}
-            data={HEALTH_PROBLEMS.map(p => ({ value: p, label: p }))}
-            size="xs"
-            placeholder="Problems"
-            clearable
-            styles={{ input: { fontSize: '12px' } }}
-          />
+          <MultiSelect value={row.original.healthProblems} onChange={(val) => updateField(row.original.studentId, 'healthProblems', val)} data={HEALTH_PROBLEMS} size="xs" placeholder="Problems" clearable />
         ),
       }));
     }
@@ -759,13 +605,7 @@ export function StudentActivityPage() {
         header: '🔬 Practical (0-4)',
         size: 180,
         cell: ({ row }) => (
-          <Select
-            value={row.original.practicalStatus}
-            onChange={(val) => updateField(row.original.studentId, 'practicalStatus', val)}
-            data={PRACTICAL_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-            size="xs"
-            styles={{ input: { fontSize: '12px' } }}
-          />
+          <Select value={row.original.practicalStatus} onChange={(val) => updateField(row.original.studentId, 'practicalStatus', val)} data={PRACTICAL_OPTIONS} size="xs" />
         ),
       }));
     }
@@ -775,13 +615,7 @@ export function StudentActivityPage() {
         header: '📖 Reading (0-4)',
         size: 180,
         cell: ({ row }) => (
-          <Select
-            value={row.original.readingStatus}
-            onChange={(val) => updateField(row.original.studentId, 'readingStatus', val)}
-            data={READING_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-            size="xs"
-            styles={{ input: { fontSize: '12px' } }}
-          />
+          <Select value={row.original.readingStatus} onChange={(val) => updateField(row.original.studentId, 'readingStatus', val)} data={READING_OPTIONS} size="xs" />
         ),
       }));
     }
@@ -791,13 +625,7 @@ export function StudentActivityPage() {
         header: '✍️ Writing (0-4)',
         size: 180,
         cell: ({ row }) => (
-          <Select
-            value={row.original.writingStatus}
-            onChange={(val) => updateField(row.original.studentId, 'writingStatus', val)}
-            data={WRITING_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-            size="xs"
-            styles={{ input: { fontSize: '12px' } }}
-          />
+          <Select value={row.original.writingStatus} onChange={(val) => updateField(row.original.studentId, 'writingStatus', val)} data={WRITING_OPTIONS} size="xs" />
         ),
       }));
     }
@@ -807,7 +635,7 @@ export function StudentActivityPage() {
         header: '⭐ Average (0-4)',
         size: 120,
         cell: ({ row }) => (
-          <Tooltip label="Average includes Homework, Classwork, Practical, Discipline, Reading, Writing (only if status changed from default OR issue entered)" withArrow>
+          <Tooltip label="Average of selected fields" withArrow>
             <Badge color={row.original.averageMarks >= 3 ? 'green' : row.original.averageMarks >= 2 ? 'yellow' : 'red'} size="lg">
               {row.original.averageMarks.toFixed(1)} / 4
             </Badge>
@@ -821,10 +649,7 @@ export function StudentActivityPage() {
         header: 'Remarks',
         size: 200,
         cell: ({ row }) => (
-          <RemarksCell
-            value={row.original.remarks}
-            onChange={(val) => updateRemarks(row.original.studentId, val)}
-          />
+          <RemarksCell value={row.original.remarks} onChange={(val) => updateRemarks(row.original.studentId, val)} />
         ),
       }));
     }
@@ -839,6 +664,10 @@ export function StudentActivityPage() {
     getFilteredRowModel: getFilteredRowModel(),
     initialState: { pagination: { pageSize: 100 } },
   });
+
+  if (!schoolId) {
+    return <Loader />;
+  }
 
   return (
     <Stack p="md" gap="md">
@@ -874,32 +703,14 @@ export function StudentActivityPage() {
           placeholder="Select section"
           data={getSectionsForClass()}
           value={selectedSection}
-          onChange={(val) => {
-            setSelectedSection(val || '');
-            setActivityData([]);
-          }}
+          onChange={(val) => setSelectedSection(val || '')}
           disabled={!selectedClassId}
         />
-        <Select
-          label="Year"
-          data={yearOptions}
-          value={selectedYear}
-          onChange={(val) => setSelectedYear(val || currentYear.toString())}
-        />
-        <Select
-          label="Month"
-          data={monthOptions}
-          value={selectedMonth}
-          onChange={(val) => {
-            setSelectedMonth(val || '1');
-            setSelectedDay('1');
-          }}
-        />
-        <Select
-          label="Day"
-          data={dayOptions}
-          value={selectedDay}
-          onChange={(val) => setSelectedDay(val || '1')}
+        <input
+          type="date"
+          value={selectedDate.toISOString().split('T')[0]}
+          onChange={(e) => setSelectedDate(new Date(e.target.value))}
+          style={{ padding: '8px', borderRadius: '8px', border: '1px solid #ced4da' }}
         />
       </Group>
 
@@ -924,43 +735,16 @@ export function StudentActivityPage() {
           </Tabs>
         </Group>
         <Group>
-          <TextInput
-            placeholder="Search by name or roll number"
-            leftSection={<IconSearch size={16} />}
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-            size="sm"
-            style={{ width: 250 }}
-          />
-          <Tooltip label="Refresh">
-            <ActionIcon onClick={handleRefresh} variant="light" size="lg">
-              <IconRefresh size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Button 
-            variant="light" 
-            leftSection={<IconSettings size={16} />} 
-            onClick={() => setDrawerOpened(true)}
-          >
-            Columns
-          </Button>
-          <Button 
-            color="green" 
-            leftSection={<IconDeviceFloppy size={16} />} 
-            onClick={handleSave} 
-            loading={isSaving}
-            disabled={!hasChanges() || activityData.length === 0}
-          >
-            Save All Changes
-          </Button>
+          <TextInput placeholder="Search by name or roll number" leftSection={<IconSearch size={16} />} value={globalFilter} onChange={(e) => setGlobalFilter(e.currentTarget.value)} size="sm" style={{ width: 250 }} />
+          <Tooltip label="Refresh"><ActionIcon onClick={handleRefresh} variant="light" size="lg"><IconRefresh size={18} /></ActionIcon></Tooltip>
+          <Button variant="light" leftSection={<IconSettings size={16} />} onClick={() => setDrawerOpened(true)}>Columns</Button>
+          <Button color="green" leftSection={<IconDeviceFloppy size={16} />} onClick={handleSave} loading={isSaving} disabled={!hasChanges() || activityData.length === 0}>Save All Changes</Button>
         </Group>
       </Group>
 
       {studentsLoading && <Loader />}
       {!selectedSection && selectedClassId && <Alert color="yellow">Please select a section to view students.</Alert>}
-      {selectedSection && filteredRecords.length === 0 && !studentsLoading && (
-        <Alert color="blue">No students found for the selected class and section.</Alert>
-      )}
+      {selectedSection && filteredRecords.length === 0 && !studentsLoading && <Alert color="blue">No students found for the selected class and section.</Alert>}
 
       {activityData.length > 0 && (
         <Paper withBorder style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 280px)' }}>
@@ -973,12 +757,7 @@ export function StudentActivityPage() {
       <Drawer opened={drawerOpened} onClose={() => setDrawerOpened(false)} title="Select Columns to Display" position="right" size="md">
         <Stack>
           {ALL_COLUMNS.map(col => (
-            <Checkbox
-              key={col.id}
-              label={col.label}
-              checked={visibleColumns.includes(col.id)}
-              onChange={() => toggleColumn(col.id)}
-            />
+            <Checkbox key={col.id} label={col.label} checked={visibleColumns.includes(col.id)} onChange={() => toggleColumn(col.id)} />
           ))}
           <Divider my="md" />
           <Group>

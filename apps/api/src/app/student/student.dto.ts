@@ -46,6 +46,11 @@ class ParentDto {
   @IsBoolean()
   @IsOptional()
   isPrimary?: boolean;
+
+  // ADD BLOOD GROUP FOR PARENT
+  @IsString()
+  @IsOptional()
+  bloodGroup?: string;
 }
 
 export class CreateStudentDto {
@@ -103,11 +108,11 @@ export class CreateStudentDto {
   @IsBoolean()
   @IsOptional()
   sameAddress?: boolean;
+
+  // ADD BLOOD GROUP FOR STUDENT
+  @IsString()
+  @IsOptional()
+  bloodGroup?: string;
 }
 
 export class UpdateStudentDto extends CreateStudentDto {}
-
-export class SearchStudentDto {
-  @IsString()
-  q: string;
-}

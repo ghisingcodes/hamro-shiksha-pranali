@@ -1,6 +1,7 @@
+// apps/api/src/app/staff/staff.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Staff } from './staff.schema';
 import { CreateStaffDto, UpdateStaffDto } from './staff.dto';
@@ -14,18 +15,22 @@ export class StaffService {
   ) {}
 
   async create(dto: CreateStaffDto, schoolId: string) {
-    const existing = await this.staffModel.findOne({ staffId: dto.staffId });
-    if (existing) throw new BadRequestException('Staff ID already exists');
-    
     // Generate staff ID if not provided
     let staffId = dto.staffId;
     if (!staffId) {
       const year = new Date().getFullYear();
-      const count = await this.staffModel.countDocuments();
+      const count = await this.staffModel.countDocuments({ schoolId: new Types.ObjectId(schoolId) });
       staffId = `STF-${year}-${String(count + 1).padStart(5, '0')}`;
     }
     
-    const staff = new this.staffModel({ ...dto, staffId, schoolId: new Types.ObjectId(schoolId) });
+    const existing = await this.staffModel.findOne({ staffId });
+    if (existing) throw new BadRequestException('Staff ID already exists');
+    
+    const staff = new this.staffModel({ 
+      ...dto, 
+      staffId,
+      schoolId: new Types.ObjectId(schoolId)
+    });
     await staff.save();
     
     // Auto-create user account for staff
@@ -57,14 +62,19 @@ export class StaffService {
         await staff.save();
         
         return { staff, user, defaultPassword };
+      } else if (!staff.userId) {
+        staff.userId = existingUser._id;
+        await staff.save();
       }
     }
     
     return { staff };
   }
 
-  async findAll() {
-    return this.staffModel.find().populate('userId').exec();
+  async findAll(schoolId?: string) {
+    const filter: any = {};
+    if (schoolId) filter.schoolId = new Types.ObjectId(schoolId);
+    return this.staffModel.find(filter).populate('userId').exec();
   }
 
   async findOne(id: string) {

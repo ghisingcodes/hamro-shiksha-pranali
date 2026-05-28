@@ -1,13 +1,13 @@
-import { useState, useMemo, useCallback, memo, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   Button, Modal, TextInput, Select, Group, Title, Stack, Loader, Badge, 
-  Text, Card, Tooltip, ActionIcon, Box, Skeleton, Paper
+  Text, Card, Tooltip, ActionIcon, Box, Skeleton, Paper, ScrollArea
 } from '@mantine/core';
 import { 
   IconUserPlus, IconPlus, IconEye, IconSearch, IconPhone, 
-  IconUsers
+  IconUsers, IconDroplet, IconCalendar, IconSchool
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import { AcademicSeason, Student, AcademicRecord, Class, ClassSection } from '../../lib/types';
@@ -16,41 +16,120 @@ import { AddStudentWizardModal } from './AddStudentWizardModal';
 import { ParentDetailsModal } from './ParentDetailsModal';
 import { StudentDetailDrawer } from './StudentDetailDrawer';
 
-// Virtualized Row Component
-const VirtualRow = memo(({ row, style, handleParentClick, handleStudentClick, selectedSeasonId, getEnrollment }: any) => {
-  const student = row;
+// Student Row Component
+const StudentRow = ({ student, style, handleParentClick, handleStudentClick, selectedSeasonId, getEnrollment, index }: any) => {
   const enrollment = getEnrollment(student._id);
   
   return (
     <div style={style}>
-      <Paper withBorder radius="md" p="sm" mb="xs" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-        <div style={{ minWidth: 130 }}><Text fw={500}>{student.studentId}</Text></div>
-        <div style={{ minWidth: 150 }}><Text fw={500}>{student.name}</Text></div>
+      <Paper 
+        withBorder 
+        radius="md" 
+        p="sm" 
+        mb="xs" 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          flexWrap: 'wrap', 
+          gap: '8px',
+          transition: 'all 0.2s ease',
+          cursor: 'pointer',
+          borderLeft: `3px solid ${index % 2 === 0 ? '#228be6' : '#40c057'}`,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = '#f8f9fa';
+          e.currentTarget.style.transform = 'translateX(4px)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'white';
+          e.currentTarget.style.transform = 'translateX(0)';
+        }}
+      >
+        {/* Student ID */}
+        <div style={{ minWidth: 130 }}>
+          <Text size="xs" c="dimmed">Student ID</Text>
+          <Text fw={600} size="sm">{student.studentId}</Text>
+        </div>
+        
+        {/* Name */}
+        <div style={{ minWidth: 150 }}>
+          <Text size="xs" c="dimmed">Name</Text>
+          <Text fw={600} size="sm">{student.name}</Text>
+        </div>
+        
+        {/* Blood Group */}
+        <div style={{ minWidth: 80 }}>
+          <Text size="xs" c="dimmed">Blood Group</Text>
+          <Badge color="violet" variant="light" size="sm">{student.bloodGroup || '—'}</Badge>
+        </div>
+        
+        {/* Parents */}
         <div style={{ minWidth: 200 }}>
+          <Text size="xs" c="dimmed">Parents</Text>
           <Stack gap={4}>
             {student.parents?.slice(0, 2).map((p: any, idx: number) => (
               <Group key={idx} gap={4}>
-                <Badge size="sm" variant="light">{p.relation}</Badge>
-                <Button variant="subtle" size="xs" onClick={() => handleParentClick(p, student)}>{p.name}</Button>
+                <Badge size="xs" variant="light">{p.relation}</Badge>
+                <Button variant="subtle" size="xs" onClick={() => handleParentClick(p, student)}>
+                  {p.name}
+                </Button>
                 <Tooltip label={p.phone}><IconPhone size={12} color="gray" /></Tooltip>
               </Group>
             ))}
-            {student.parents && student.parents.length > 2 && <Text size="xs" c="dimmed">+{student.parents.length - 2} more</Text>}
+            {student.parents && student.parents.length > 2 && (
+              <Text size="xs" c="dimmed">+{student.parents.length - 2} more</Text>
+            )}
           </Stack>
         </div>
+        
+        {/* Current Enrollment */}
         <div style={{ minWidth: 180 }}>
-          {!selectedSeasonId ? <Text c="dimmed" size="xs">Select season</Text> : !enrollment ? <Badge color="gray">Not enrolled</Badge> : <div><Badge color="blue" variant="light">{(enrollment.classId as any)?.displayName}</Badge><Text size="xs">Sec: {enrollment.section} | Roll: {enrollment.rollNumber || '—'}</Text></div>}
+          <Text size="xs" c="dimmed">Current Enrollment</Text>
+          {!selectedSeasonId ? (
+            <Text c="dimmed" size="xs">Select season</Text>
+          ) : !enrollment ? (
+            <Badge color="gray" size="sm">Not enrolled</Badge>
+          ) : (
+            <div>
+              <Badge color="blue" variant="light" size="sm">
+                {(enrollment.classId as any)?.displayName}
+              </Badge>
+              <Text size="xs" mt={2}>Sec: {enrollment.section} | Roll: {enrollment.rollNumber || '—'}</Text>
+            </div>
+          )}
         </div>
+        
+        {/* Actions */}
         <div>
           <Group gap={4}>
-            <Tooltip label="View Details"><ActionIcon variant="light" onClick={() => handleStudentClick(student)}><IconEye size={16} /></ActionIcon></Tooltip>
-            <Tooltip label="Enroll"><ActionIcon variant="light" color="green" onClick={() => {}} disabled={!selectedSeasonId}><IconPlus size={16} /></ActionIcon></Tooltip>
+            <Tooltip label="View Details">
+              <ActionIcon 
+                variant="light" 
+                color="blue" 
+                onClick={() => handleStudentClick(student)}
+                size="lg"
+              >
+                <IconEye size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Enroll">
+              <ActionIcon 
+                variant="light" 
+                color="green" 
+                onClick={() => {}} 
+                disabled={!selectedSeasonId}
+                size="lg"
+              >
+                <IconPlus size={18} />
+              </ActionIcon>
+            </Tooltip>
           </Group>
         </div>
       </Paper>
     </div>
   );
-});
+};
 
 export function StudentsPage() {
   const queryClient = useQueryClient();
@@ -162,7 +241,7 @@ export function StudentsPage() {
   const rowVirtualizer = useVirtualizer({
     count: displayData.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 85,
+    estimateSize: () => 95,
     overscan: 5,
   });
 
@@ -173,43 +252,90 @@ export function StudentsPage() {
       <Title order={1}>Student Management</Title>
       
       {/* Filter Bar */}
-      <Card withBorder radius="md" p="sm">
+      <Paper withBorder radius="md" p="sm" shadow="sm">
         <Group justify="space-between">
           <Group gap="sm">
-            <TextInput placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSearch()} style={{ width: 250 }} leftSection={<IconSearch size={16} />} />
+            <TextInput
+              placeholder="Search by name, ID, or parent phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              style={{ width: 280 }}
+              leftSection={<IconSearch size={16} />}
+            />
             <Button onClick={handleSearch} variant="light" size="sm">Search</Button>
-            {(searchResults.length > 0 || searchQuery) && <Button variant="subtle" size="sm" onClick={() => { setSearchQuery(''); setSearchResults([]); }}>Clear</Button>}
+            {(searchResults.length > 0 || searchQuery) && (
+              <Button variant="subtle" size="sm" onClick={() => { setSearchQuery(''); setSearchResults([]); }}>
+                Clear
+              </Button>
+            )}
           </Group>
           <Group gap="sm">
-            <Select placeholder="Season" data={seasons.map(s => ({ value: s._id, label: s.name }))} value={selectedSeasonId} onChange={setSelectedSeasonId} clearable style={{ width: 150 }} size="sm" />
-            <Button leftSection={<IconUserPlus size={16} />} onClick={() => setWizardOpen(true)} variant="filled" size="sm">Add</Button>
+            <Select
+              placeholder="Filter by Season"
+              data={seasons.map(s => ({ value: s._id, label: s.name }))}
+              value={selectedSeasonId}
+              onChange={setSelectedSeasonId}
+              clearable
+              style={{ width: 180 }}
+              size="sm"
+            />
+            <Button leftSection={<IconUserPlus size={16} />} onClick={() => setWizardOpen(true)} variant="filled" size="sm">
+              Add Student
+            </Button>
           </Group>
         </Group>
-      </Card>
+      </Paper>
 
-      {/* Virtualized Student List */}
+      {/* Student List - Virtualized */}
       {studentsLoading ? (
         <Stack>
-          {[...Array(5)].map((_, i) => <Skeleton key={i} height={85} radius="md" />)}
+          {[...Array(5)].map((_, i) => <Skeleton key={i} height={95} radius="md" />)}
         </Stack>
       ) : displayData.length === 0 ? (
-        <Card withBorder p="xl" ta="center"><Text c="dimmed">No students found</Text></Card>
+        <Paper withBorder p="xl" ta="center">
+          <Text c="dimmed">No students found</Text>
+        </Paper>
       ) : (
-        <div ref={parentRef} style={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}>
-          <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-              <div key={virtualRow.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}>
-                <VirtualRow 
-                  row={displayData[virtualRow.index]}
-                  handleParentClick={handleParentClick}
-                  handleStudentClick={handleStudentClick}
-                  selectedSeasonId={selectedSeasonId}
-                  getEnrollment={getEnrollment}
-                />
-              </div>
-            ))}
+        <Paper withBorder radius="md" p="sm" style={{ backgroundColor: '#f8f9fa' }}>
+          {/* Table Header */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            flexWrap: 'wrap', 
+            gap: '8px',
+            padding: '12px 8px',
+            borderBottom: '2px solid #dee2e6',
+            marginBottom: '8px',
+            fontWeight: 600,
+            color: '#495057'
+          }}>
+            <div style={{ minWidth: 130 }}>Student ID</div>
+            <div style={{ minWidth: 150 }}>Name</div>
+            <div style={{ minWidth: 80 }}>Blood Group</div>
+            <div style={{ minWidth: 200 }}>Parents</div>
+            <div style={{ minWidth: 180 }}>Current Enrollment</div>
+            <div style={{ minWidth: 80 }}>Actions</div>
           </div>
-        </div>
+          
+          <div ref={parentRef} style={{ height: 'calc(100vh - 280px)', overflow: 'auto' }}>
+            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+                <div key={virtualRow.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}>
+                  <StudentRow 
+                    student={displayData[virtualRow.index]}
+                    index={virtualRow.index}
+                    handleParentClick={handleParentClick}
+                    handleStudentClick={handleStudentClick}
+                    selectedSeasonId={selectedSeasonId}
+                    getEnrollment={getEnrollment}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Paper>
       )}
 
       {/* Modals */}

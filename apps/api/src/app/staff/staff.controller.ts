@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Headers } from '@nestjs/common';
+// apps/api/src/app/staff/staff.controller.ts
+import { Controller, Get, Post, Body, Param, Put, Delete, Headers, Query } from '@nestjs/common';
 import { StaffService } from './staff.service';
 import { CreateStaffDto, UpdateStaffDto } from './staff.dto';
 
@@ -12,8 +13,8 @@ export class StaffController {
   }
 
   @Get()
-  findAll() {
-    return this.staffService.findAll();
+  findAll(@Headers('x-school-id') schoolId: string) {
+    return this.staffService.findAll(schoolId);
   }
 
   @Get(':id')

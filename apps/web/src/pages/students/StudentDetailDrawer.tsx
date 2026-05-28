@@ -2,15 +2,16 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Drawer, Stack, Card, Group, Avatar, Title, Badge, Grid, Text,
   Tabs, SimpleGrid, Paper, Divider, ScrollArea, Table as MantineTable,
-  Loader
+  Loader, Alert
 } from '@mantine/core';
 import {
   IconCalendar, IconGenderBigender, IconUsers, IconId, IconPhone,
   IconMail, IconBriefcase, IconMapPin, IconCurrencyRupee, IconSchool,
-  IconHeart, IconBrain, IconDeviceMobile, IconWifi
+  IconHeart, IconBrain, IconDeviceMobile, IconWifi, IconReceipt,
+  IconDroplet
 } from '@tabler/icons-react';
 import { api } from '../../lib/api';
-import { Student, AcademicRecord, ClassSection, AcademicSeason } from '../../lib/types';
+import { Student, AcademicRecord, EnrollmentRecord } from '../../lib/types';
 
 interface StudentDetailDrawerProps {
   opened: boolean;
@@ -39,22 +40,29 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId }: StudentDetailDrawerProps) {
   // Fetch academic records for this student
-  const { data: records, isLoading: recordsLoading } = useQuery<AcademicRecord[]>({
+  const { data: academicRecords, isLoading: academicLoading } = useQuery<AcademicRecord[]>({
     queryKey: ['academicRecords', student?._id],
     queryFn: () => api.get(`/academic-records?studentId=${student?._id}`).then(res => res.data),
-    enabled: !!student?._id,
+    enabled: !!student?._id && opened,
   });
 
-  const getEnrollment = (studentId: string) => {
-    if (!selectedSeasonId || !records) return null;
-    return records.find(r => {
-      const rStudentId = typeof r.studentId === 'string' ? r.studentId : r.studentId._id;
-      return rStudentId === studentId && r.seasonId === selectedSeasonId;
-    });
-  };
+  // Fetch enrollment records for this student
+  const { data: enrollmentRecords, isLoading: enrollmentLoading } = useQuery<EnrollmentRecord[]>({
+    queryKey: ['enrollmentRecords', student?._id],
+    queryFn: () => api.get(`/enrollment-records?studentId=${student?._id}`).then(res => res.data),
+    enabled: !!student?._id && opened,
+  });
 
   if (!student) return null;
-  const enrollment = getEnrollment(student._id);
+
+  // Get enrollment for selected season
+  const currentEnrollment = enrollmentRecords?.find(
+    e => (typeof e.seasonId === 'string' ? e.seasonId : e.seasonId?._id) === selectedSeasonId
+  );
+
+  // Calculate total paid months
+  const paidMonths = currentEnrollment?.monthlyFees?.filter((mf: any) => mf.isPaid).length || 0;
+  const totalMonths = currentEnrollment?.monthlyFees?.length || 12;
 
   return (
     <Drawer
@@ -77,9 +85,14 @@ export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId
                 <Title order={3}>{student.name}</Title>
                 <Group gap="xs" mt={4}>
                   <Badge size="lg" variant="filled" color="blue">{student.studentId}</Badge>
-                  {enrollment && (
-                    <Badge size="lg" variant="light" color={STATUS_COLORS[enrollment.status]}>
-                      {STATUS_LABELS[enrollment.status]}
+                  {currentEnrollment && (
+                    <Badge size="lg" variant="light" color={STATUS_COLORS[currentEnrollment.status]}>
+                      {STATUS_LABELS[currentEnrollment.status]}
+                    </Badge>
+                  )}
+                  {student.bloodGroup && (
+                    <Badge size="lg" variant="light" color="violet">
+                      🩸 {student.bloodGroup}
                     </Badge>
                   )}
                 </Group>
@@ -88,7 +101,7 @@ export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId
           </Card>
 
           {/* Quick Stats */}
-          <SimpleGrid cols={3} spacing="md">
+          <SimpleGrid cols={4} spacing="md">
             <Paper withBorder p="sm" radius="md" ta="center">
               <IconCalendar size={24} color="blue" style={{ marginBottom: 8 }} />
               <Text fw={600} size="sm">Age</Text>
@@ -104,6 +117,11 @@ export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId
               <Text fw={600} size="sm">Parents</Text>
               <Text size="lg">{student.parents?.length || 0}</Text>
             </Paper>
+            <Paper withBorder p="sm" radius="md" ta="center">
+              <IconReceipt size={24} color="teal" style={{ marginBottom: 8 }} />
+              <Text fw={600} size="sm">Fees Paid</Text>
+              <Text size="lg">{paidMonths}/{totalMonths} months</Text>
+            </Paper>
           </SimpleGrid>
 
           {/* Tabs for different sections */}
@@ -112,7 +130,8 @@ export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId
               <Tabs.Tab value="personal" leftSection={<IconId size={14} />}>Personal</Tabs.Tab>
               <Tabs.Tab value="parents" leftSection={<IconUsers size={14} />}>Parents ({student.parents?.length || 0})</Tabs.Tab>
               <Tabs.Tab value="health" leftSection={<IconHeart size={14} />}>Health</Tabs.Tab>
-              <Tabs.Tab value="academic" leftSection={<IconSchool size={14} />}>Academic</Tabs.Tab>
+              <Tabs.Tab value="academic" leftSection={<IconSchool size={14} />}>Academic History</Tabs.Tab>
+              <Tabs.Tab value="fees" leftSection={<IconReceipt size={14} />}>Fee Details</Tabs.Tab>
             </Tabs.List>
 
             <Tabs.Panel value="personal" pt="md">
@@ -133,6 +152,10 @@ export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId
                   <Grid.Col span={6}>
                     <Text size="sm" c="dimmed">Gender</Text>
                     <Text fw={500}>{student.gender || '—'}</Text>
+                  </Grid.Col>
+                  <Grid.Col span={6}>
+                    <Text size="sm" c="dimmed">Blood Group</Text>
+                    <Text fw={500}>{student.bloodGroup || '—'}</Text>
                   </Grid.Col>
                   <Grid.Col span={6}>
                     <Text size="sm" c="dimmed">Lives with</Text>
@@ -179,6 +202,12 @@ export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId
                       <Grid.Col span={6}>
                         <Group gap="xs"><IconCurrencyRupee size={14} /><Text size="sm">Monthly: ₹{parent.monthlyIncome?.toLocaleString() || '—'}</Text></Group>
                       </Grid.Col>
+                      <Grid.Col span={6}>
+                        <Group gap="xs"><IconDroplet size={14} /><Text size="sm">Blood Group: {parent.bloodGroup || '—'}</Text></Group>
+                      </Grid.Col>
+                      <Grid.Col span={6}>
+                        <Group gap="xs"><IconSchool size={14} /><Text size="sm">Education: {parent.education || '—'}</Text></Group>
+                      </Grid.Col>
                     </Grid>
                   </Card>
                 ))}
@@ -222,19 +251,21 @@ export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId
 
             <Tabs.Panel value="academic" pt="md">
               <Card withBorder radius="md">
-                <Title order={5} mb="md">Enrollment History</Title>
-                {recordsLoading ? (
+                <Title order={5} mb="md">Academic History</Title>
+                {academicLoading ? (
                   <Loader size="sm" />
+                ) : !academicRecords?.length ? (
+                  <Text c="dimmed" ta="center">No academic records found.</Text>
                 ) : (
                   <MantineTable striped highlightOnHover>
                     <thead>
                       <tr><th>Season</th><th>Class</th><th>Section</th><th>Roll No</th><th>Status</th></tr>
                     </thead>
                     <tbody>
-                      {records?.map(record => (
+                      {academicRecords.map(record => (
                         <tr key={record._id}>
-                          <td>{(record.seasonId as any)?.name}</td>
-                          <td>{(record.classId as any)?.displayName}</td>
+                          <td>{(record.seasonId as any)?.name || 'N/A'}</td>
+                          <td>{(record.classId as any)?.displayName || 'N/A'}</td>
                           <td>{record.section}</td>
                           <td>{record.rollNumber || '—'}</td>
                           <td><Badge color={STATUS_COLORS[record.status]}>{record.status}</Badge></td>
@@ -242,6 +273,77 @@ export function StudentDetailDrawer({ opened, onClose, student, selectedSeasonId
                       ))}
                     </tbody>
                   </MantineTable>
+                )}
+              </Card>
+            </Tabs.Panel>
+
+            <Tabs.Panel value="fees" pt="md">
+              <Card withBorder radius="md">
+                <Title order={5} mb="md">Fee Details - Current Season</Title>
+                {enrollmentLoading ? (
+                  <Loader size="sm" />
+                ) : !currentEnrollment ? (
+                  <Alert color="blue" title="No Enrollment">
+                    No enrollment record found for the selected season.
+                  </Alert>
+                ) : (
+                  <Stack>
+                    <SimpleGrid cols={3} spacing="md">
+                      <Paper p="sm" withBorder>
+                        <Text size="xs" c="dimmed">Admission Fee</Text>
+                        <Text fw={600}>₹{currentEnrollment.admissionFee?.toLocaleString() || 0}</Text>
+                      </Paper>
+                      <Paper p="sm" withBorder>
+                        <Text size="xs" c="dimmed">Monthly Fee</Text>
+                        <Text fw={600}>₹{currentEnrollment.monthlyFeeAmount?.toLocaleString() || 0}/month</Text>
+                      </Paper>
+                      <Paper p="sm" withBorder>
+                        <Text size="xs" c="dimmed">Exam Fee</Text>
+                        <Text fw={600}>₹{currentEnrollment.examFee?.toLocaleString() || 0}</Text>
+                      </Paper>
+                      <Paper p="sm" withBorder>
+                        <Text size="xs" c="dimmed">Other Fees</Text>
+                        <Text fw={600}>₹{currentEnrollment.otherFees?.toLocaleString() || 0}</Text>
+                      </Paper>
+                      <Paper p="sm" withBorder bg="green.0">
+                        <Text size="xs" c="dimmed">Total Fees</Text>
+                        <Text fw={600} c="green">₹{currentEnrollment.totalFees?.toLocaleString() || 0}</Text>
+                      </Paper>
+                      <Paper p="sm" withBorder bg="orange.0">
+                        <Text size="xs" c="dimmed">Due Amount</Text>
+                        <Text fw={600} c="orange">₹{currentEnrollment.totalDue?.toLocaleString() || 0}</Text>
+                      </Paper>
+                    </SimpleGrid>
+
+                    <Divider label="Monthly Fee Details" labelPosition="center" />
+                    
+                    <MantineTable striped highlightOnHover>
+                      <thead>
+                        <tr><th>Month</th><th>Amount</th><th>Status</th><th>Payment Date</th></tr>
+                      </thead>
+                      <tbody>
+                        {currentEnrollment.monthlyFees?.map((mf: any, idx: number) => (
+                          <tr key={idx}>
+                            <td>{mf.month}</td>
+                            <td>₹{mf.amount?.toLocaleString()}</td>
+                            <td>
+                              {mf.isPaid ? (
+                                <Badge color="green">✅ Paid</Badge>
+                              ) : (
+                                <Badge color="red">❌ Pending</Badge>
+                              )}
+                            </td>
+                            <td>{mf.paidDate ? new Date(mf.paidDate).toLocaleDateString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </MantineTable>
+                    
+                    <Alert color="blue" mt="md">
+                      Total Paid: ₹{currentEnrollment.totalPaid?.toLocaleString() || 0} | 
+                      Due: ₹{currentEnrollment.totalDue?.toLocaleString() || 0}
+                    </Alert>
+                  </Stack>
                 )}
               </Card>
             </Tabs.Panel>

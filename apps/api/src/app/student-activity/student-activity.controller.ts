@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query, Headers } from '@nestjs/common';
 import { StudentActivityService } from './student-activity.service';
 import { CreateStudentActivityDto, BulkStudentActivityDto, StudentActivityFilterDto } from './student-activity.dto';
 
@@ -12,13 +12,13 @@ export class StudentActivityController {
   }
 
   @Post('bulk')
-  createBulk(@Body() dto: BulkStudentActivityDto) {
-    return this.activityService.createBulk(dto);
+  createBulk(@Body() dto: BulkStudentActivityDto, @Headers('x-school-id') schoolId: string) {
+    return this.activityService.createBulk({ ...dto, schoolId });
   }
 
   @Get()
-  findAll(@Query() filter: StudentActivityFilterDto) {
-    return this.activityService.findAll(filter);
+  findAll(@Query() filter: StudentActivityFilterDto, @Headers('x-school-id') schoolId: string) {
+    return this.activityService.findAll({ ...filter, schoolId });
   }
 
   @Get(':id')
