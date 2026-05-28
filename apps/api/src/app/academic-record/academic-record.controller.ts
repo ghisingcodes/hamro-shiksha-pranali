@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query, Headers } from '@nestjs/common';
 import { AcademicRecordService } from './academic-record.service';
 import { CreateAcademicRecordDto, UpdateAcademicRecordDto, PromoteStudentDto } from './academic-record.dto';
 
@@ -7,13 +7,17 @@ export class AcademicRecordController {
   constructor(private readonly recordService: AcademicRecordService) {}
 
   @Post()
-  create(@Body() dto: CreateAcademicRecordDto) {
-    return this.recordService.create(dto);
+  create(@Body() dto: CreateAcademicRecordDto, @Headers('x-school-id') schoolId: string) {
+    return this.recordService.create(dto, schoolId);
   }
 
   @Get()
-  findAll(@Query('studentId') studentId?: string, @Query('seasonId') seasonId?: string) {
-    return this.recordService.findAll(studentId, seasonId);
+  findAll(
+    @Query('studentId') studentId?: string, 
+    @Query('seasonId') seasonId?: string,
+    @Headers('x-school-id') schoolId: string
+  ) {
+    return this.recordService.findAll(studentId, seasonId, schoolId);
   }
 
   @Get(':id')

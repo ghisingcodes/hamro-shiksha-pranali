@@ -1,5 +1,29 @@
-import { IsString, IsMongoId, IsOptional, IsNumber, IsDate, IsEnum, Min } from 'class-validator';
+import { IsString, IsMongoId, IsOptional, IsNumber, IsDate, IsEnum, IsArray, ValidateNested, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
+
+class MonthlyFeeDto {
+  @IsString()
+  month: string;
+
+  @IsNumber()
+  amount: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isPaid?: boolean;
+
+  @IsDate()
+  @IsOptional()
+  paidDate?: Date;
+
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
+
+  @IsString()
+  @IsOptional()
+  transactionId?: string;
+}
 
 export class CreateEnrollmentRecordDto {
   @IsMongoId()
@@ -23,29 +47,20 @@ export class CreateEnrollmentRecordDto {
   status?: string;
 
   @IsNumber()
-  @Min(0)
   @IsOptional()
   admissionFee?: number;
 
   @IsNumber()
-  @Min(0)
   @IsOptional()
-  tuitionFee?: number;
+  monthlyFeeAmount?: number;
 
   @IsNumber()
-  @Min(0)
   @IsOptional()
   examFee?: number;
 
   @IsNumber()
-  @Min(0)
   @IsOptional()
   otherFees?: number;
-
-  @IsNumber()
-  @Min(0)
-  @IsOptional()
-  paidAmount?: number;
 
   @IsDate()
   @Type(() => Date)
@@ -58,3 +73,27 @@ export class CreateEnrollmentRecordDto {
 }
 
 export class UpdateEnrollmentRecordDto extends CreateEnrollmentRecordDto {}
+
+export class PayMonthlyFeeDto {
+  @IsString()
+  month: string;
+
+  @IsNumber()
+  @IsOptional()
+  amount?: number;
+
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
+
+  @IsString()
+  @IsOptional()
+  transactionId?: string;
+}
+
+export class BulkMonthlyFeesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MonthlyFeeDto)
+  monthlyFees: MonthlyFeeDto[];
+}

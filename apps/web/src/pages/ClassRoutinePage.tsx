@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Select, Table, Button, Modal, TextInput, Group, Stack, Title, Loader, Alert, Badge, Checkbox, Divider } from '@mantine/core';
+import { Select, Table, Button, Modal, TextInput, Group, Stack, Title, Loader, Alert, Badge, Checkbox, Divider, ScrollArea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { api } from '../lib/api';
 import { AcademicSeason, ClassSection, Teacher } from '../lib/types';
@@ -15,18 +15,18 @@ export function ClassRoutinePage() {
   const [selectedSectionIndex, setSelectedSectionIndex] = useState(0);
   const [editCell, setEditCell] = useState<{ day: number; period: number } | null>(null);
   const [editSubject, setEditSubject] = useState('');
-  const [editTeacher, setEditTeacher] = useState('');
+  const [editTeacherId, setEditTeacherId] = useState('');
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
 
-  // For copying to all days (old feature)
+  // For copying to all days
   const [copyPeriod, setCopyPeriod] = useState<number | null>(null);
-  const [copyTeacher, setCopyTeacher] = useState('');
+  const [copyTeacherId, setCopyTeacherId] = useState('');
   const [copySubject, setCopySubject] = useState('');
   const [copyModalOpened, { open: openCopyModal, close: closeCopyModal }] = useDisclosure(false);
 
   // For assigning to selected days
   const [assignPeriod, setAssignPeriod] = useState<number | null>(null);
-  const [assignTeacher, setAssignTeacher] = useState('');
+  const [assignTeacherId, setAssignTeacherId] = useState('');
   const [assignSubject, setAssignSubject] = useState('');
   const [assignDays, setAssignDays] = useState<boolean[]>(Array(5).fill(false));
   const [assignModalOpened, { open: openAssignModal, close: closeAssignModal }] = useDisclosure(false);
@@ -36,10 +36,33 @@ export function ClassRoutinePage() {
     queryFn: () => api.get('/academic-seasons').then(res => res.data),
   });
 
+  // Fetch teachers with unique options using _id
   const { data: teachers = [] } = useQuery<Teacher[]>({
     queryKey: ['teachers'],
     queryFn: () => api.get('/teachers').then(res => res.data),
   });
+
+  // Create unique teacher options
+  const teacherOptions = useMemo(() => {
+    return teachers.map(teacher => ({
+      value: teacher._id,
+      label: `${teacher.name} (${teacher.teacherId})`,
+      name: teacher.name,
+      subjects: teacher.subjects || [],
+    }));
+  }, [teachers]);
+
+  // Helper to get teacher name by ID
+  const getTeacherName = (teacherId: string) => {
+    const teacher = teachers.find(t => t._id === teacherId);
+    return teacher?.name || '';
+  };
+
+  // Helper to get teacher subjects by ID
+  const getTeacherSubjects = (teacherId: string) => {
+    const teacher = teachers.find(t => t._id === teacherId);
+    return teacher?.subjects || [];
+  };
 
   const { data: classSections, isLoading, refetch } = useQuery<ClassSection[]>({
     queryKey: ['classSections', selectedSeasonId],
@@ -74,6 +97,7 @@ export function ClassRoutinePage() {
   const copyToAllDaysMutation = useMutation({
     mutationFn: async () => {
       if (copyPeriod === null) return;
+      const teacherName = getTeacherName(copyTeacherId);
       const promises = [];
       for (let day = 0; day < 5; day++) {
         promises.push(
@@ -82,7 +106,7 @@ export function ClassRoutinePage() {
             day,
             period: copyPeriod,
             subject: copySubject,
-            teacher: copyTeacher,
+            teacher: teacherName,
           })
         );
       }
@@ -98,6 +122,7 @@ export function ClassRoutinePage() {
   const assignToSelectedDaysMutation = useMutation({
     mutationFn: async () => {
       if (assignPeriod === null) return;
+      const teacherName = getTeacherName(assignTeacherId);
       const promises = [];
       for (let day = 0; day < 5; day++) {
         if (assignDays[day]) {
@@ -107,7 +132,7 @@ export function ClassRoutinePage() {
               day,
               period: assignPeriod,
               subject: assignSubject,
-              teacher: assignTeacher,
+              teacher: teacherName,
             })
           );
         }
@@ -124,25 +149,27 @@ export function ClassRoutinePage() {
   const handleEdit = (day: number, period: number) => {
     const entry = currentSection?.routine[day]?.[period];
     setEditSubject(entry?.subject || '');
-    setEditTeacher(entry?.teacher || '');
+    const teacher = teachers.find(t => t.name === entry?.teacher);
+    setEditTeacherId(teacher?._id || '');
     setEditCell({ day, period });
     openModal();
   };
 
   const handleSave = () => {
     if (editCell) {
+      const teacherName = getTeacherName(editTeacherId);
       updateRoutineMutation.mutate({
         sectionIndex: selectedSectionIndex,
         day: editCell.day,
         period: editCell.period,
         subject: editSubject,
-        teacher: editTeacher,
+        teacher: teacherName,
       });
     }
   };
 
   const handleCopyToAllDays = () => {
-    if (copyPeriod !== null && copyTeacher && copySubject) {
+    if (copyPeriod !== null && copyTeacherId && copySubject) {
       copyToAllDaysMutation.mutate();
     } else {
       notifications.show({ title: 'Error', message: 'Please select period, teacher, and subject', color: 'red' });
@@ -150,7 +177,7 @@ export function ClassRoutinePage() {
   };
 
   const handleAssignToSelectedDays = () => {
-    if (assignPeriod !== null && assignTeacher && assignSubject && assignDays.some(d => d)) {
+    if (assignPeriod !== null && assignTeacherId && assignSubject && assignDays.some(d => d)) {
       assignToSelectedDaysMutation.mutate();
     } else {
       notifications.show({ title: 'Error', message: 'Please select period, teacher, subject, and at least one day', color: 'red' });
@@ -202,20 +229,20 @@ export function ClassRoutinePage() {
             <Button onClick={openAssignModal} variant="light" color="teal">Assign to Selected Days (Period)</Button>
           </Group>
 
-          <div style={{ overflowX: 'auto' }}>
+          <ScrollArea style={{ overflowX: 'auto' }}>
             <Table striped highlightOnHover>
               <thead>
                 <tr>
-                  <th>Day / Period</th>
+                  <th style={{ minWidth: 100 }}>Day / Period</th>
                   {Array.from({ length: periodCount }).map((_, i) => (
-                    <th key={i}>Period {i + 1}</th>
+                    <th key={i} style={{ minWidth: 120 }}>Period {i + 1}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {DAYS.map((day, d) => (
                   <tr key={d}>
-                    <td style={{ fontWeight: 'bold' }}>{day}</td>
+                    <td style={{ fontWeight: 'bold', backgroundColor: '#f8f9fa' }}>{day}</td>
                     {Array.from({ length: periodCount }).map((_, p) => {
                       const entry = currentSection.routine[d]?.[p];
                       return (
@@ -233,20 +260,20 @@ export function ClassRoutinePage() {
                 ))}
               </tbody>
             </Table>
-          </div>
+          </ScrollArea>
         </>
       )}
 
       {/* Edit single cell modal */}
-      <Modal opened={modalOpened} onClose={closeModal} title="Edit Period">
+      <Modal opened={modalOpened} onClose={closeModal} title="Edit Period" size="md">
         <TextInput label="Subject" value={editSubject} onChange={e => setEditSubject(e.currentTarget.value)} required />
         <Select
           label="Teacher"
           placeholder="Select teacher"
-          data={teachers.map(t => ({ value: t.name, label: t.name }))}
-          value={editTeacher}
+          data={teacherOptions}
+          value={editTeacherId}
           onChange={(val) => {
-            setEditTeacher(val || '');
+            setEditTeacherId(val || '');
             setEditSubject('');
           }}
           searchable
@@ -255,11 +282,11 @@ export function ClassRoutinePage() {
         />
         <Select
           label="Subject (filtered by teacher)"
-          placeholder={editTeacher ? "Select subject" : "First select a teacher"}
-          data={teachers.find(t => t.name === editTeacher)?.subjects.map(s => ({ value: s, label: s })) || []}
+          placeholder={editTeacherId ? "Select subject" : "First select a teacher"}
+          data={getTeacherSubjects(editTeacherId).map(s => ({ value: s, label: s })) || []}
           value={editSubject}
           onChange={(val) => setEditSubject(val || '')}
-          disabled={!editTeacher}
+          disabled={!editTeacherId}
           searchable
           mt="md"
         />
@@ -270,7 +297,7 @@ export function ClassRoutinePage() {
       </Modal>
 
       {/* Copy to all days modal */}
-      <Modal opened={copyModalOpened} onClose={closeCopyModal} title="Copy to All Days for a Period">
+      <Modal opened={copyModalOpened} onClose={closeCopyModal} title="Copy to All Days for a Period" size="md">
         <Select
           label="Select Period"
           placeholder="Choose period"
@@ -281,10 +308,10 @@ export function ClassRoutinePage() {
         <Select
           label="Teacher"
           placeholder="Select teacher"
-          data={teachers.map(t => ({ value: t.name, label: t.name }))}
-          value={copyTeacher}
+          data={teacherOptions}
+          value={copyTeacherId}
           onChange={(val) => {
-            setCopyTeacher(val || '');
+            setCopyTeacherId(val || '');
             setCopySubject('');
           }}
           searchable
@@ -293,11 +320,11 @@ export function ClassRoutinePage() {
         />
         <Select
           label="Subject (filtered by teacher)"
-          placeholder={copyTeacher ? "Select subject" : "First select a teacher"}
-          data={teachers.find(t => t.name === copyTeacher)?.subjects.map(s => ({ value: s, label: s })) || []}
+          placeholder={copyTeacherId ? "Select subject" : "First select a teacher"}
+          data={getTeacherSubjects(copyTeacherId).map(s => ({ value: s, label: s })) || []}
           value={copySubject}
           onChange={(val) => setCopySubject(val || '')}
-          disabled={!copyTeacher}
+          disabled={!copyTeacherId}
           searchable
           mt="md"
         />
@@ -308,7 +335,7 @@ export function ClassRoutinePage() {
       </Modal>
 
       {/* Assign to selected days modal */}
-      <Modal opened={assignModalOpened} onClose={closeAssignModal} title="Assign to Selected Days for a Period">
+      <Modal opened={assignModalOpened} onClose={closeAssignModal} title="Assign to Selected Days for a Period" size="md">
         <Select
           label="Select Period"
           placeholder="Choose period"
@@ -319,10 +346,10 @@ export function ClassRoutinePage() {
         <Select
           label="Teacher"
           placeholder="Select teacher"
-          data={teachers.map(t => ({ value: t.name, label: t.name }))}
-          value={assignTeacher}
+          data={teacherOptions}
+          value={assignTeacherId}
           onChange={(val) => {
-            setAssignTeacher(val || '');
+            setAssignTeacherId(val || '');
             setAssignSubject('');
           }}
           searchable
@@ -331,11 +358,11 @@ export function ClassRoutinePage() {
         />
         <Select
           label="Subject (filtered by teacher)"
-          placeholder={assignTeacher ? "Select subject" : "First select a teacher"}
-          data={teachers.find(t => t.name === assignTeacher)?.subjects.map(s => ({ value: s, label: s })) || []}
+          placeholder={assignTeacherId ? "Select subject" : "First select a teacher"}
+          data={getTeacherSubjects(assignTeacherId).map(s => ({ value: s, label: s })) || []}
           value={assignSubject}
           onChange={(val) => setAssignSubject(val || '')}
-          disabled={!assignTeacher}
+          disabled={!assignTeacherId}
           searchable
           mt="md"
         />

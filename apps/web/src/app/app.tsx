@@ -4,7 +4,7 @@ import { AcademicsPage } from '../pages/academics/AcademicsPage';
 import { ClassRoutinePage } from '../pages/ClassRoutinePage';
 import { StudentsPage } from '../pages/students/StudentsPage';
 import { TeachersPage } from '../pages/TeachersPage';
-import { TeacherSchedulePage } from '../pages/TeacherSchedulePage';
+import { TeacherSchedulePage } from '../pages/routines/TeacherSchedulePage';
 import { StudentDetailPage } from '../pages/students/StudentDetailPage';
 import { DailyAttendance, MonthlyAttendance, StudentAttendance } from '../pages/attendance';
 import { StudentActivityPage } from '../pages/student-activity/StudentActivityPage';
@@ -12,7 +12,7 @@ import { EnrollmentPage } from '../pages/enrollment/EnrollmentPage';
 import { LoginPage } from '../pages/auth/LoginPage';
 import { UsersPage } from '../pages/users/UsersPage';
 import { StaffPage } from '../pages/staffs/StaffPage';
-import { SchoolSignupPage } from '@/pages/auth/SchoolSignupPage';
+import { SchoolSignupPage } from '../pages/auth/SchoolSignupPage';
 
 // Protected route wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {

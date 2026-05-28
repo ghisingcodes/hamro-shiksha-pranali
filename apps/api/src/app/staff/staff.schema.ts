@@ -1,10 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class Staff extends Document {
   @Prop({ required: true, unique: true })
-  staffId: string; // e.g., "STAFF-001"
+  staffId: string;
 
   @Prop({ required: true })
   name: string;
@@ -16,7 +16,7 @@ export class Staff extends Document {
   email?: string;
 
   @Prop()
-  position?: string; // Accountant, Librarian, Receptionist, etc.
+  position?: string;
 
   @Prop()
   department?: string;
@@ -32,6 +32,12 @@ export class Staff extends Document {
 
   @Prop({ default: '' })
   emergencyContact?: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'School' })
+  schoolId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  userId?: Types.ObjectId;
 }
 
 export const StaffSchema = SchemaFactory.createForClass(Staff);

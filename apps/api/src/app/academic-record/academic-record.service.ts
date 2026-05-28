@@ -14,20 +14,22 @@ export class AcademicRecordService {
     @InjectModel(Class.name) private classModel: Model<Class>,
   ) {}
 
-  async create(dto: CreateAcademicRecordDto) {
+  async create(dto: CreateAcademicRecordDto, schoolId: string) {
     const existing = await this.recordModel.findOne({
       studentId: dto.studentId,
       seasonId: dto.seasonId,
     });
     if (existing) throw new BadRequestException('Student already enrolled in this season');
-    const record = new this.recordModel(dto);
+    
+    const record = new this.recordModel({ ...dto, schoolId: new Types.ObjectId(schoolId) });
     return record.save();
   }
 
-  async findAll(studentId?: string, seasonId?: string) {
+  async findAll(studentId?: string, seasonId?: string, schoolId?: string) {
     const filter: any = {};
     if (studentId) filter.studentId = new Types.ObjectId(studentId);
     if (seasonId) filter.seasonId = new Types.ObjectId(seasonId);
+    if (schoolId) filter.schoolId = new Types.ObjectId(schoolId);
     return this.recordModel.find(filter).populate('studentId seasonId classId').exec();
   }
 
@@ -86,6 +88,7 @@ export class AcademicRecordService {
       rollNumber: '',
       status: 'active',
       previousAcademicRecordId: fromRecord._id,
+      schoolId: fromRecord.schoolId,
     });
     await newRecord.save();
 

@@ -12,6 +12,9 @@ export class AcademicRecord extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Class', required: true })
   classId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
+  schoolId: Types.ObjectId;
+
   @Prop({ required: true })
   section: string;
 

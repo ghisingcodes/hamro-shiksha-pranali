@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Headers } from '@nestjs/common';
 import { StaffService } from './staff.service';
 import { CreateStaffDto, UpdateStaffDto } from './staff.dto';
 
@@ -7,8 +7,8 @@ export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
   @Post()
-  create(@Body() dto: CreateStaffDto) {
-    return this.staffService.create(dto);
+  create(@Body() dto: CreateStaffDto, @Headers('x-school-id') schoolId: string) {
+    return this.staffService.create(dto, schoolId);
   }
 
   @Get()
