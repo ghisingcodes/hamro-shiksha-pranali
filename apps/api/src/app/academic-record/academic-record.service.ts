@@ -25,12 +25,30 @@ export class AcademicRecordService {
     return record.save();
   }
 
-  async findAll(studentId?: string, seasonId?: string, schoolId?: string) {
+  async findAll(
+    studentId?: string, 
+    seasonId?: string, 
+    classId?: string, 
+    section?: string, 
+    schoolId?: string
+  ) {
     const filter: any = {};
+    
     if (studentId) filter.studentId = new Types.ObjectId(studentId);
     if (seasonId) filter.seasonId = new Types.ObjectId(seasonId);
+    if (classId) filter.classId = new Types.ObjectId(classId);
+    if (section) filter.section = section;
     if (schoolId) filter.schoolId = new Types.ObjectId(schoolId);
-    return this.recordModel.find(filter).populate('studentId seasonId classId').exec();
+    
+    console.log('🔍 AcademicRecord Filter:', JSON.stringify(filter, null, 2));
+    
+    const records = await this.recordModel
+      .find(filter)
+      .populate('studentId seasonId classId')
+      .exec();
+    
+    console.log(`📊 Found ${records.length} academic records`);
+    return records;
   }
 
   async findOne(id: string) {

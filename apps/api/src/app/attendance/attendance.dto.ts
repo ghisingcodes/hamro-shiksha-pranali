@@ -1,7 +1,10 @@
-import { IsString, IsMongoId, IsDate, IsEnum, IsOptional, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsMongoId, IsDate, IsEnum, IsOptional, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateAttendanceDto {
+  @IsMongoId()
+  schoolId: string;
+
   @IsMongoId()
   studentId: string;
 
@@ -76,7 +79,35 @@ export class BulkAttendanceDto {
   date: Date;
 
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => BulkAttendanceItemDto)
   attendance: BulkAttendanceItemDto[];
+}
+
+export class AttendanceFilterDto {
+  @IsMongoId()
+  @IsOptional()
+  schoolId?: string;
+
+  @IsMongoId()
+  @IsOptional()
+  seasonId?: string;
+
+  @IsMongoId()
+  @IsOptional()
+  classId?: string;
+
+  @IsString()
+  @IsOptional()
+  section?: string;
+
+  @IsString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsString()
+  @IsOptional()
+  endDate?: string;
+
+  @IsMongoId()
+  @IsOptional()
+  studentId?: string;
 }

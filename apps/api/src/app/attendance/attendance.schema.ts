@@ -3,6 +3,9 @@ import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class Attendance extends Document {
+  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
+  schoolId: Types.ObjectId;
+
   @Prop({ type: Types.ObjectId, ref: 'Student', required: true })
   studentId: Types.ObjectId;
 

@@ -5,7 +5,7 @@ import {
   Textarea, Paper, MultiSelect, Text, Tabs,
   ActionIcon, Tooltip, Divider, TextInput, Checkbox, Drawer, Box
 } from '@mantine/core';
-import { IconRefresh, IconSettings, IconDeviceFloppy, IconSearch } from '@tabler/icons-react';
+import { IconRefresh, IconSettings, IconDeviceFloppy, IconSearch, IconCalendar } from '@tabler/icons-react';
 import { createColumnHelper, useReactTable, getCoreRowModel, getPaginationRowModel, getFilteredRowModel } from '@tanstack/react-table';
 import { api } from '../../lib/api';
 import { AcademicSeason, Class, ClassSection, Student } from '../../lib/types';
@@ -241,13 +241,40 @@ export function StudentActivityPage() {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
   const [activePeriod, setActivePeriod] = useState<number>(1);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  // Year, Month, Day dropdowns
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString());
+  const [selectedDay, setSelectedDay] = useState(new Date().getDate().toString());
+  
   const [activityData, setActivityData] = useState<ActivityRow[]>([]);
   const [originalData, setOriginalData] = useState<ActivityRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
   const [drawerOpened, setDrawerOpened] = useState(false);
   const [globalFilter, setGlobalFilter] = useState('');
+
+  // Calculate selected date from dropdowns
+  const selectedDate = new Date(parseInt(selectedYear), parseInt(selectedMonth) - 1, parseInt(selectedDay));
+  const dayOfWeek = DAYS[selectedDate.getDay()];
+
+  // Generate day options based on selected month/year
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month, 0).getDate();
+  };
+  const daysInMonth = getDaysInMonth(parseInt(selectedYear), parseInt(selectedMonth));
+  const dayOptions = Array.from({ length: daysInMonth }, (_, i) => ({ value: (i + 1).toString(), label: (i + 1).toString() }));
+  
+  // Year options (current year -5 to +5)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 11 }, (_, i) => ({ value: (currentYear - 5 + i).toString(), label: (currentYear - 5 + i).toString() }));
+  
+  const monthOptions = [
+    { value: '1', label: 'January' }, { value: '2', label: 'February' }, { value: '3', label: 'March' },
+    { value: '4', label: 'April' }, { value: '5', label: 'May' }, { value: '6', label: 'June' },
+    { value: '7', label: 'July' }, { value: '8', label: 'August' }, { value: '9', label: 'September' },
+    { value: '10', label: 'October' }, { value: '11', label: 'November' }, { value: '12', label: 'December' },
+  ];
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const schoolId = user.schoolId;
@@ -318,7 +345,7 @@ export function StudentActivityPage() {
 
   // Fetch existing activities
   const { data: existingActivities, refetch: refetchActivities } = useQuery({
-    queryKey: ['studentActivities', selectedSeasonId, selectedClassId, selectedSection, activePeriod, selectedDate],
+    queryKey: ['studentActivities', selectedSeasonId, selectedClassId, selectedSection, activePeriod, selectedYear, selectedMonth, selectedDay],
     queryFn: () => api.get(`/student-activities?seasonId=${selectedSeasonId}&classId=${selectedClassId}&section=${selectedSection}&period=${activePeriod}&date=${selectedDate.toISOString()}`).then(res => res.data),
     enabled: !!selectedSeasonId && !!selectedClassId && !!selectedSection,
   });
@@ -478,7 +505,6 @@ export function StudentActivityPage() {
   };
 
   const periodTabs = Array.from({ length: periodCount }, (_, i) => i + 1);
-  const dayOfWeek = DAYS[selectedDate.getDay()];
 
   const filteredData = useMemo(() => {
     if (!globalFilter) return activityData;
@@ -703,20 +729,46 @@ export function StudentActivityPage() {
           placeholder="Select section"
           data={getSectionsForClass()}
           value={selectedSection}
-          onChange={(val) => setSelectedSection(val || '')}
+          onChange={setSelectedSection}
           disabled={!selectedClassId}
         />
-        <input
-          type="date"
-          value={selectedDate.toISOString().split('T')[0]}
-          onChange={(e) => setSelectedDate(new Date(e.target.value))}
-          style={{ padding: '8px', borderRadius: '8px', border: '1px solid #ced4da' }}
+      </Group>
+
+      {/* Year, Month, Day Dropdowns */}
+      <Group grow>
+        <Select
+          label="Year"
+          placeholder="Select year"
+          data={yearOptions}
+          value={selectedYear}
+          onChange={(val) => {
+            setSelectedYear(val || currentYear.toString());
+            setSelectedDay('1');
+          }}
+        />
+        <Select
+          label="Month"
+          placeholder="Select month"
+          data={monthOptions}
+          value={selectedMonth}
+          onChange={(val) => {
+            setSelectedMonth(val || '1');
+            setSelectedDay('1');
+          }}
+        />
+        <Select
+          label="Day"
+          placeholder="Select day"
+          data={dayOptions}
+          value={selectedDay}
+          onChange={setSelectedDay}
         />
       </Group>
 
       <Alert color="blue" variant="light">
         <Group>
-          <Text>📅 {selectedDate.toLocaleDateString()} ({dayOfWeek})</Text>
+          <IconCalendar size={18} />
+          <Text>📅 Selected Date: {selectedDate.toLocaleDateString()} ({dayOfWeek})</Text>
           <Divider orientation="vertical" />
           <Text fw={600}>👨‍🏫 Teacher: {routine?.teacher || 'Not assigned'}</Text>
           <Text fw={600}>📚 Subject: {routine?.subject || 'Not assigned'}</Text>
@@ -735,16 +787,43 @@ export function StudentActivityPage() {
           </Tabs>
         </Group>
         <Group>
-          <TextInput placeholder="Search by name or roll number" leftSection={<IconSearch size={16} />} value={globalFilter} onChange={(e) => setGlobalFilter(e.currentTarget.value)} size="sm" style={{ width: 250 }} />
-          <Tooltip label="Refresh"><ActionIcon onClick={handleRefresh} variant="light" size="lg"><IconRefresh size={18} /></ActionIcon></Tooltip>
-          <Button variant="light" leftSection={<IconSettings size={16} />} onClick={() => setDrawerOpened(true)}>Columns</Button>
-          <Button color="green" leftSection={<IconDeviceFloppy size={16} />} onClick={handleSave} loading={isSaving} disabled={!hasChanges() || activityData.length === 0}>Save All Changes</Button>
+          <TextInput
+            placeholder="Search by name or roll number"
+            leftSection={<IconSearch size={16} />}
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.currentTarget.value)}
+            size="sm"
+            style={{ width: 250 }}
+          />
+          <Tooltip label="Refresh">
+            <ActionIcon onClick={handleRefresh} variant="light" size="lg">
+              <IconRefresh size={18} />
+            </ActionIcon>
+          </Tooltip>
+          <Button 
+            variant="light" 
+            leftSection={<IconSettings size={16} />} 
+            onClick={() => setDrawerOpened(true)}
+          >
+            Columns
+          </Button>
+          <Button 
+            color="green" 
+            leftSection={<IconDeviceFloppy size={16} />} 
+            onClick={handleSave} 
+            loading={isSaving}
+            disabled={!hasChanges() || activityData.length === 0}
+          >
+            Save All Changes
+          </Button>
         </Group>
       </Group>
 
       {studentsLoading && <Loader />}
       {!selectedSection && selectedClassId && <Alert color="yellow">Please select a section to view students.</Alert>}
-      {selectedSection && filteredRecords.length === 0 && !studentsLoading && <Alert color="blue">No students found for the selected class and section.</Alert>}
+      {selectedSection && filteredRecords.length === 0 && !studentsLoading && (
+        <Alert color="blue">No students found for the selected class and section.</Alert>
+      )}
 
       {activityData.length > 0 && (
         <Paper withBorder style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 280px)' }}>
@@ -757,7 +836,12 @@ export function StudentActivityPage() {
       <Drawer opened={drawerOpened} onClose={() => setDrawerOpened(false)} title="Select Columns to Display" position="right" size="md">
         <Stack>
           {ALL_COLUMNS.map(col => (
-            <Checkbox key={col.id} label={col.label} checked={visibleColumns.includes(col.id)} onChange={() => toggleColumn(col.id)} />
+            <Checkbox
+              key={col.id}
+              label={col.label}
+              checked={visibleColumns.includes(col.id)}
+              onChange={() => toggleColumn(col.id)}
+            />
           ))}
           <Divider my="md" />
           <Group>

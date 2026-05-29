@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query, Headers } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
-import { CreateAttendanceDto, BulkAttendanceDto } from './attendance.dto';
+import { CreateAttendanceDto, BulkAttendanceDto, AttendanceFilterDto } from './attendance.dto';
 
 @Controller('attendance')
 export class AttendanceController {
@@ -12,20 +12,13 @@ export class AttendanceController {
   }
 
   @Post('bulk')
-  createBulk(@Body() dto: BulkAttendanceDto) {
-    return this.attendanceService.createBulk(dto);
+  createBulk(@Body() dto: BulkAttendanceDto, @Headers('x-school-id') schoolId: string) {
+    return this.attendanceService.createBulk({ ...dto, schoolId });
   }
 
   @Get()
-  findAll(
-    @Query('seasonId') seasonId?: string,
-    @Query('classId') classId?: string,
-    @Query('section') section?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('studentId') studentId?: string,
-  ) {
-    return this.attendanceService.findAll({ seasonId, classId, section, startDate, endDate, studentId });
+  findAll(@Query() filter: AttendanceFilterDto, @Headers('x-school-id') schoolId: string) {
+    return this.attendanceService.findAll({ ...filter, schoolId });
   }
 
   @Get(':id')

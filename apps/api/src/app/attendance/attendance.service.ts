@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Attendance } from './attendance.schema';
-import { CreateAttendanceDto, BulkAttendanceDto } from './attendance.dto';
+import { CreateAttendanceDto, BulkAttendanceDto, AttendanceFilterDto } from './attendance.dto';
 
 @Injectable()
 export class AttendanceService {
@@ -13,9 +13,10 @@ export class AttendanceService {
     return attendance.save();
   }
 
-  async createBulk(dto: BulkAttendanceDto) {
+  async createBulk(dto: BulkAttendanceDto & { schoolId: string }) {
     // Delete existing records for this date, class, section
     await this.attendanceModel.deleteMany({
+      schoolId: new Types.ObjectId(dto.schoolId),
       seasonId: new Types.ObjectId(dto.seasonId),
       classId: new Types.ObjectId(dto.classId),
       section: dto.section,
@@ -24,6 +25,7 @@ export class AttendanceService {
 
     // Insert new records
     const records = dto.attendance.map(record => ({
+      schoolId: new Types.ObjectId(dto.schoolId),
       studentId: new Types.ObjectId(record.studentId),
       seasonId: new Types.ObjectId(dto.seasonId),
       classId: new Types.ObjectId(dto.classId),
@@ -41,15 +43,9 @@ export class AttendanceService {
     return [];
   }
 
-  async findAll(filter: {
-    seasonId?: string;
-    classId?: string;
-    section?: string;
-    startDate?: string;
-    endDate?: string;
-    studentId?: string;
-  }) {
+  async findAll(filter: AttendanceFilterDto & { schoolId: string }) {
     const query: any = {};
+    if (filter.schoolId) query.schoolId = new Types.ObjectId(filter.schoolId);
     if (filter.seasonId) query.seasonId = new Types.ObjectId(filter.seasonId);
     if (filter.classId) query.classId = new Types.ObjectId(filter.classId);
     if (filter.section) query.section = filter.section;

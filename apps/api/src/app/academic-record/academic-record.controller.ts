@@ -13,11 +13,14 @@ export class AcademicRecordController {
 
   @Get()
   findAll(
-    @Query('studentId') studentId?: string, 
+    @Query('studentId') studentId?: string,
     @Query('seasonId') seasonId?: string,
-    @Headers('x-school-id') schoolId: string
+    @Query('classId') classId?: string,
+    @Query('section') section?: string,
+    @Headers('x-school-id') schoolId?: string,
   ) {
-    return this.recordService.findAll(studentId, seasonId, schoolId);
+    console.log('📊 AcademicRecord Query Params:', { studentId, seasonId, classId, section, schoolId });
+    return this.recordService.findAll(studentId, seasonId, classId, section, schoolId);
   }
 
   @Get(':id')
