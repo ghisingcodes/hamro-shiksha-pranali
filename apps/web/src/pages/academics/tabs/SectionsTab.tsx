@@ -41,7 +41,7 @@ export function SectionsTab({ selectedSeasonId, onSeasonChange }: SectionsTabPro
     enabled: !!schoolId,
   });
 
-  // Fetch sections
+  // Fetch sections - with populated class teacher
   const { data: sections, refetch, isLoading: sectionsLoading, error } = useQuery({
     queryKey: ['sections', selectedSeasonId, selectedClassId, schoolId],
     queryFn: async () => {
@@ -51,23 +51,25 @@ export function SectionsTab({ selectedSeasonId, onSeasonChange }: SectionsTabPro
         params: { seasonId: selectedSeasonId, classId: selectedClassId },
         headers: { 'X-School-Id': schoolId } 
       });
-      console.log('Sections API response:', res.data);
+      console.log('Sections API response:', JSON.stringify(res.data, null, 2));
       return res.data || [];
     },
     enabled: !!selectedSeasonId && !!selectedClassId && !!schoolId,
   });
 
-  // Fetch teachers
-  const { data: teachers } = useQuery({
+  // Fetch teachers (still needed for period teachers)
+  const { data: teachers, isLoading: teachersLoading } = useQuery({
     queryKey: ['teachers', schoolId],
-    queryFn: () => api.get('/teachers').then(res => res.data),
+    queryFn: () => api.get('/teachers', { headers: { 'X-School-Id': schoolId } }).then(res => res.data),
     enabled: !!schoolId,
   });
 
-  // Fetch subjects
-  const { data: subjects } = useQuery({
-    queryKey: ['subjects', selectedSeasonId, selectedClassId],
-    queryFn: () => api.get(`/subjects?seasonId=${selectedSeasonId}&classId=${selectedClassId}`).then(res => res.data),
+  // Fetch subjects (still needed for period teachers)
+  const { data: subjects, isLoading: subjectsLoading } = useQuery({
+    queryKey: ['subjects', selectedSeasonId, selectedClassId, schoolId],
+    queryFn: () => api.get(`/subjects?seasonId=${selectedSeasonId}&classId=${selectedClassId}`, { 
+      headers: { 'X-School-Id': schoolId } 
+    }).then(res => res.data),
     enabled: !!selectedSeasonId && !!selectedClassId && !!schoolId,
   });
 
@@ -111,13 +113,19 @@ export function SectionsTab({ selectedSeasonId, onSeasonChange }: SectionsTabPro
   const selectedClass = classes?.find(c => c._id === selectedClassId);
   const sectionsList = sections || [];
 
+  // Get class teacher - now the teacher and subject are already populated in the section object
   const getClassTeacher = (section: any) => {
-    const teacher = teachers?.find(t => t._id === section.currentClassTeacherId);
-    const subject = subjects?.find(s => s._id === section.currentClassTeacherSubjectId);
-    return { teacher, subject };
+    // The teacher and subject are already populated by the backend
+    if (section.currentClassTeacherId && typeof section.currentClassTeacherId === 'object') {
+      return { 
+        teacher: section.currentClassTeacherId, 
+        subject: section.currentClassTeacherSubjectId 
+      };
+    }
+    return { teacher: null, subject: null };
   };
 
-  if (seasonsLoading || classesLoading) return <Loader />;
+  if (seasonsLoading || classesLoading || teachersLoading || subjectsLoading) return <Loader />;
 
   return (
     <Stack gap="xl">
@@ -282,7 +290,7 @@ export function SectionsTab({ selectedSeasonId, onSeasonChange }: SectionsTabPro
 
                     <Divider my="md" />
 
-                    {/* Class Teacher Info */}
+                    {/* Class Teacher Info - Using populated data from backend */}
                     <div onClick={(e) => e.stopPropagation()}>
                       <Group mb="xs" align="center">
                         <IconUser size={14} color="gray" />
@@ -293,17 +301,19 @@ export function SectionsTab({ selectedSeasonId, onSeasonChange }: SectionsTabPro
                         <Card withBorder radius="md" p="xs" style={{ background: '#e8f0fe' }}>
                           <Group>
                             <Avatar size="md" color="blue" radius="xl">
-                              {classTeacher.teacher.name?.charAt(0)}
+                              {classTeacher.teacher.name?.charAt(0) || '?'}
                             </Avatar>
                             <div>
-                              <Text size="sm" fw={600}>{classTeacher.teacher.name}</Text>
-                              <Text size="xs" c="dimmed">{classTeacher.subject?.name || 'No subject assigned'}</Text>
+                              <Text size="sm" fw={600}>{classTeacher.teacher.name || 'Unknown Teacher'}</Text>
+                              <Text size="xs" c="dimmed">
+                                {classTeacher.subject?.name || (classTeacher.subject && typeof classTeacher.subject === 'object' ? classTeacher.subject.name : 'No subject assigned')}
+                              </Text>
                             </div>
                           </Group>
                         </Card>
                       ) : (
                         <Alert color="yellow" variant="light" p="xs" radius="md">
-                          <Text size="xs">⚠️ No class teacher assigned.</Text>
+                          <Text size="xs">⚠️ No class teacher assigned for this section.</Text>
                         </Alert>
                       )}
                     </div>
@@ -335,8 +345,8 @@ export function SectionsTab({ selectedSeasonId, onSeasonChange }: SectionsTabPro
                           <Stack gap="xs" mt="xs">
                             {Object.entries(section.periodTeachers || {}).map(([period, assignments]: [string, any]) => {
                               const active = assignments?.find((a: any) => !a.endDate);
-                              const teacher = teachers?.find(t => t._id === active?.teacherId);
-                              const subject = subjects?.find(s => s._id === active?.subjectId);
+                              const teacher = teachers?.find((t: any) => t._id === active?.teacherId);
+                              const subject = subjects?.find((s: any) => s._id === active?.subjectId);
                               return (
                                 <Card key={period} withBorder radius="md" p="xs" style={{ background: '#fafafa' }}>
                                   <Group justify="space-between" wrap="nowrap">
@@ -345,7 +355,12 @@ export function SectionsTab({ selectedSeasonId, onSeasonChange }: SectionsTabPro
                                     <Text size="xs" fw={500}>{teacher?.name || '—'}</Text>
                                   </Group>
                                   {active?.days && active.days.length > 0 && (
-                                    <Text size="xs" c="dimmed" mt={4}>Days: {active.days.join(', ')}</Text>
+                                    <Text size="xs" c="dimmed" mt={4}>
+                                      Days: {active.days.map((d: string) => {
+                                        const dayMap: Record<string, string> = { M: 'Mon', T: 'Tue', W: 'Wed', Th: 'Thu', F: 'Fri' };
+                                        return dayMap[d];
+                                      }).join(', ')}
+                                    </Text>
                                   )}
                                 </Card>
                               );
