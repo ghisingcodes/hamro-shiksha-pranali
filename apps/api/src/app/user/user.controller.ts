@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query, UseGuards, Req } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto, UpdateUserDto, LoginDto, ChangePasswordDto } from './user.dto';
 
@@ -17,13 +17,19 @@ export class UserController {
   }
 
   @Post('change-password')
-  changePassword(@Body() dto: ChangePasswordDto) {
-    return this.userService.changePassword(dto);
+  changePassword(@Body() dto: ChangePasswordDto, @Req() req: any) {
+    const userId = req.user?.id;
+    return this.userService.changePassword(userId, dto);
+  }
+
+  @Post(':id/reset-password')
+  async resetPassword(@Param('id') id: string, @Body('password') password: string) {
+    return this.userService.resetPassword(id, password);
   }
 
   @Get()
-  findAll(@Query('role') role?: string) {
-    return this.userService.findAll(role);
+  findAll(@Query('role') role?: string, @Query('schoolId') schoolId?: string) {
+    return this.userService.findAll(role, schoolId);
   }
 
   @Get(':id')
@@ -44,5 +50,14 @@ export class UserController {
   @Put(':id/toggle-status')
   toggleStatus(@Param('id') id: string) {
     return this.userService.toggleStatus(id);
+  }
+
+  @Put(':id/password')
+  updatePassword(
+    @Param('id') id: string, 
+    @Body('password') password: string,
+    @Body('passwordChanged') passwordChanged: boolean = true
+  ) {
+    return this.userService.updatePassword(id, password, passwordChanged);
   }
 }

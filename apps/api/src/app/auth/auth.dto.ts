@@ -1,9 +1,12 @@
-import { IsString, IsEmail, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsEnum, IsMongoId, IsDate } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class SchoolSignupDto {
-  // School details
   @IsString()
   schoolName: string;
+
+  @IsString()
+  slug: string;
 
   @IsString()
   @IsOptional()
@@ -21,7 +24,6 @@ export class SchoolSignupDto {
   @IsOptional()
   panNumber?: string;
 
-  // Super Admin details
   @IsString()
   adminName: string;
 
@@ -37,9 +39,47 @@ export class SchoolSignupDto {
 }
 
 export class LoginDto {
-  @IsEmail()
-  email: string;
+  @IsString()
+  userType: 'student' | 'parent' | 'teacher';
+
+  @IsString()
+  @IsOptional()
+  identifier?: string;
+
+  @IsString()
+  @IsOptional()
+  password?: string;
+
+  @IsString()
+  @IsOptional()
+  rollNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  className?: string;
+
+  @IsString()
+  @IsOptional()
+  section?: string;
+
+  @IsDate()
+  @Type(() => Date)
+  @IsOptional()
+  dateOfBirth?: Date;
+}
+
+export class SuperAdminLoginDto {
+  @IsString()
+  identifier: string;
 
   @IsString()
   password: string;
+}
+
+export class ChangePasswordDto {
+  @IsString()
+  oldPassword: string;
+
+  @IsString()
+  newPassword: string;
 }

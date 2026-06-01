@@ -1,62 +1,105 @@
-// apps/api/src/app/class-section/class-section.controller.ts
-import { Controller, Get, Post, Body, Param, Delete, Put, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, Query, Headers, ParseIntPipe } from '@nestjs/common';
 import { ClassSectionService } from './class-section.service';
-import { CreateClassSectionDto, AddSectionDto, UpdateRoutineDto } from './class-section.dto';
+import { 
+  CreateClassSectionDto, 
+  AssignClassTeacherDto, 
+  AssignPeriodTeacherDto,
+  EndTeacherAssignmentDto,
+  UpdateTeacherAssignmentDto,
+  AddSectionDto,
+  RenameSectionDto
+} from './class-section.dto';
 
 @Controller('class-sections')
 export class ClassSectionController {
   constructor(private readonly classSectionService: ClassSectionService) {}
 
   @Post()
-  async create(@Body() dto: CreateClassSectionDto, @Req() req: any) {
-    const schoolId = req.headers['x-school-id'] || req.user?.schoolId;
-    console.log('Creating class section with data:', { ...dto, schoolId });
-    return this.classSectionService.create({ ...dto, schoolId });
+  create(@Body() dto: CreateClassSectionDto) {
+    return this.classSectionService.create(dto);
   }
 
   @Get()
-  async findAll(@Query('seasonId') seasonId?: string, @Query('classId') classId?: string, @Req() req: any) {
-    const schoolId = req.headers['x-school-id'] || req.user?.schoolId;
+  findAll(@Query('seasonId') seasonId?: string, @Query('classId') classId?: string, @Headers('x-school-id') schoolId?: string) {
     return this.classSectionService.findAll(seasonId, classId, schoolId);
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string) {
     return this.classSectionService.findOne(id);
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() dto: CreateClassSectionDto) {
+  update(@Param('id') id: string, @Body() dto: CreateClassSectionDto) {
     return this.classSectionService.update(id, dto);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string, @Req() req: any) {
-    const schoolId = req.headers['x-school-id'] || req.user?.schoolId;
+  remove(@Param('id') id: string, @Headers('x-school-id') schoolId: string) {
     return this.classSectionService.remove(id, schoolId);
   }
 
   @Post(':id/sections')
-  async addSection(@Param('id') id: string, @Body() dto: AddSectionDto, @Req() req: any) {
-    const schoolId = req.headers['x-school-id'] || req.user?.schoolId;
-    return this.classSectionService.addSection(id, dto.name, schoolId);
+  addSection(@Param('id') id: string, @Body() dto: AddSectionDto) {
+    return this.classSectionService.addSection(id, dto.name);
   }
 
   @Delete(':id/sections/:name')
-  async deleteSection(@Param('id') id: string, @Param('name') name: string, @Req() req: any) {
-    const schoolId = req.headers['x-school-id'] || req.user?.schoolId;
+  deleteSection(@Param('id') id: string, @Param('name') name: string, @Headers('x-school-id') schoolId: string) {
     return this.classSectionService.deleteSection(id, name, schoolId);
   }
 
   @Put(':id/sections/:oldName')
-  async renameSection(@Param('id') id: string, @Param('oldName') oldName: string, @Body('name') newName: string, @Req() req: any) {
-    const schoolId = req.headers['x-school-id'] || req.user?.schoolId;
-    return this.classSectionService.renameSection(id, oldName, newName, schoolId);
+  renameSection(
+    @Param('id') id: string,
+    @Param('oldName') oldName: string,
+    @Body() dto: RenameSectionDto,
+  ) {
+    return this.classSectionService.renameSection(id, oldName, dto.newName);
   }
 
-  @Put(':id/routine')
-  async updateRoutine(@Param('id') id: string, @Body() dto: UpdateRoutineDto, @Req() req: any) {
-    const schoolId = req.headers['x-school-id'] || req.user?.schoolId;
-    return this.classSectionService.updateRoutine(id, dto, schoolId);
+  @Post(':id/sections/:sectionIndex/class-teacher')
+  assignClassTeacher(
+    @Param('id') id: string,
+    @Param('sectionIndex', ParseIntPipe) sectionIndex: number,
+    @Body() dto: AssignClassTeacherDto,
+  ) {
+    return this.classSectionService.assignClassTeacher(id, sectionIndex, dto);
+  }
+
+  @Post(':id/sections/:sectionIndex/period-teacher')
+  assignPeriodTeacher(
+    @Param('id') id: string,
+    @Param('sectionIndex', ParseIntPipe) sectionIndex: number,
+    @Body() dto: AssignPeriodTeacherDto,
+  ) {
+    return this.classSectionService.assignPeriodTeacher(id, sectionIndex, dto);
+  }
+
+  @Put(':id/sections/:sectionIndex/period-teacher')
+  updateTeacherAssignment(
+    @Param('id') id: string,
+    @Param('sectionIndex', ParseIntPipe) sectionIndex: number,
+    @Body() dto: UpdateTeacherAssignmentDto,
+  ) {
+    return this.classSectionService.updateTeacherAssignment(id, sectionIndex, dto);
+  }
+
+  @Post(':id/sections/:sectionIndex/end-assignment')
+  endTeacherAssignment(
+    @Param('id') id: string,
+    @Param('sectionIndex', ParseIntPipe) sectionIndex: number,
+    @Body() dto: EndTeacherAssignmentDto,
+  ) {
+    return this.classSectionService.endTeacherAssignment(id, sectionIndex, dto);
+  }
+
+  @Get(':id/sections/:sectionIndex/current-teachers')
+  getCurrentTeachers(
+    @Param('id') id: string,
+    @Param('sectionIndex', ParseIntPipe) sectionIndex: number,
+    @Query('date') date?: string,
+  ) {
+    return this.classSectionService.getCurrentTeachers(id, sectionIndex, date ? new Date(date) : new Date());
   }
 }

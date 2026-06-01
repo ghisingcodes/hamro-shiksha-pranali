@@ -1,3 +1,4 @@
+// apps/api/src/app/academic-record/academic-record.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 

@@ -40,15 +40,10 @@ export class AcademicRecordService {
     if (section) filter.section = section;
     if (schoolId) filter.schoolId = new Types.ObjectId(schoolId);
     
-    console.log('🔍 AcademicRecord Filter:', JSON.stringify(filter, null, 2));
-    
-    const records = await this.recordModel
+    return this.recordModel
       .find(filter)
       .populate('studentId seasonId classId')
       .exec();
-    
-    console.log(`📊 Found ${records.length} academic records`);
-    return records;
   }
 
   async findOne(id: string) {

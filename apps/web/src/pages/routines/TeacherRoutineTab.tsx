@@ -1,14 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Select, Button, Group, Card, Text, Loader, Badge, Grid, Paper, ScrollArea, Box, Title, Alert, ActionIcon, Tooltip, Stack, Divider } from '@mantine/core';
-import { IconCalendarTime, IconUser, IconCalendar, IconRefresh, IconEye, IconSchool, IconClock } from '@tabler/icons-react';
+import { Select, Button, Group, Card, Text, Loader, Badge, Grid, Paper, ScrollArea, Box, Title, Alert, ActionIcon, Tooltip, Stack, Divider, ThemeIcon } from '@mantine/core';
+import { IconUser, IconCalendar, IconRefresh, IconEye, IconSchool, IconClock, IconBook } from '@tabler/icons-react';
 import { api } from '../../lib/api';
 import { Teacher, ClassSection, AcademicSeason } from '../../lib/types';
-import { notifications } from '@mantine/notifications';
 import { TeacherDetailModal } from './TeacherDetailModal';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const DAY_ABBR = ['M', 'T', 'W', 'Th', 'F'];
+const DAY_ABBR = { Monday: 'M', Tuesday: 'T', Wednesday: 'W', Thursday: 'Th', Friday: 'F' };
 
 export function TeacherRoutineTab() {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
@@ -16,7 +15,6 @@ export function TeacherRoutineTab() {
   const [selectedTeacherDetails, setSelectedTeacherDetails] = useState<Teacher | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
-  // Fetch seasons and auto-select the latest (most recent startDate or isActive)
   const { data: seasons } = useQuery<AcademicSeason[]>({
     queryKey: ['seasons'],
     queryFn: () => api.get('/academic-seasons').then(res => res.data),
@@ -25,7 +23,6 @@ export function TeacherRoutineTab() {
   // Auto-select latest season
   useEffect(() => {
     if (seasons && seasons.length > 0 && !selectedSeasonId) {
-      // Find active season first, otherwise get the latest by startDate
       const activeSeason = seasons.find(s => s.isActive);
       if (activeSeason) {
         setSelectedSeasonId(activeSeason._id);
@@ -49,80 +46,62 @@ export function TeacherRoutineTab() {
     enabled: !!selectedSeasonId && !!selectedTeacherId,
   });
 
+  // Use teacherId as value to avoid duplicates
   const teacherOptions = useMemo(() => {
     if (!teachers) return [];
-    return teachers.map(teacher => ({ value: teacher._id, label: `${teacher.name} (${teacher.teacherId})` }));
+    return teachers.map(teacher => ({ 
+      value: teacher._id, 
+      label: `${teacher.name} (${teacher.teacherId})` 
+    }));
   }, [teachers]);
 
-  // Auto-refetch when teacher is selected
   useEffect(() => {
     if (selectedTeacherId && selectedSeasonId) {
       const teacher = teachers?.find(t => t._id === selectedTeacherId);
       setSelectedTeacherDetails(teacher || null);
       refetch();
     }
-  }, [selectedTeacherId, selectedSeasonId]);
+  }, [selectedTeacherId, selectedSeasonId, teachers]);
 
-  // Build schedule: Periods as rows, each row contains Class, Section, Subject, Days
+  // Build schedule from new structure
   const scheduleRows = useMemo(() => {
     if (!classSections || !selectedTeacherDetails) return [];
 
-    const periodMap = new Map(); // period -> array of { className, sectionName, subject, days }
-    
+    const periodMap = new Map();
+
     for (const cs of classSections) {
       const className = (cs.classId as any)?.displayName || 'Unknown Class';
-      const periodCount = cs.sections[0]?.routine[0]?.length || 7;
-
+      
       for (const section of cs.sections) {
         const sectionName = section.name;
         
-        for (let period = 0; period < periodCount; period++) {
-          const periodNum = period + 1;
-          const dayInfo = [];
+        for (const periodTeacher of section.periodTeachers || []) {
+          const period = periodTeacher.period;
+          // Find active assignment for this teacher
+          const activeAssignment = periodTeacher.assignments?.find(
+            a => a.teacherId === selectedTeacherId && !a.endDate
+          );
           
-          for (let day = 0; day < 5; day++) {
-            const entry = section.routine[day]?.[period];
-            if (entry && entry.teacher === selectedTeacherDetails.name) {
-              dayInfo.push({
-                day: day,
-                dayAbbr: DAY_ABBR[day],
-                subject: entry.subject,
-              });
+          if (activeAssignment) {
+            if (!periodMap.has(period)) {
+              periodMap.set(period, []);
             }
-          }
-          
-          if (dayInfo.length > 0) {
-            if (!periodMap.has(periodNum)) {
-              periodMap.set(periodNum, []);
-            }
-            // Group by class-section-subject (might have multiple subjects on different days)
-            periodMap.get(periodNum).push({
+            periodMap.get(period).push({
               className,
               sectionName,
-              subject: dayInfo[0].subject,
-              days: dayInfo,
-              isMultiDay: dayInfo.length > 1,
-              subjectsList: [...new Set(dayInfo.map(d => d.subject))],
+              subject: periodTeacher.subject,
+              days: activeAssignment.days,
             });
           }
         }
       }
     }
     
-    // Convert to array and sort by period
     const periods = Array.from(periodMap.keys()).sort((a, b) => a - b);
-    const rows = [];
-    
-    for (const period of periods) {
-      const entries = periodMap.get(period);
-      // If multiple entries for same period, combine them
-      rows.push({
-        period,
-        entries,
-      });
-    }
-    
-    return rows;
+    return periods.map(period => ({
+      period,
+      entries: periodMap.get(period),
+    }));
   }, [classSections, selectedTeacherDetails]);
 
   if (isError) return <Alert color="red">Failed to load schedule. Please try again later.</Alert>;
@@ -141,6 +120,7 @@ export function TeacherRoutineTab() {
               onChange={setSelectedTeacherId}
               searchable
               clearable
+              nothingFoundMessage="No teachers found"
             />
           </Grid.Col>
           <Grid.Col span={4}>
@@ -156,14 +136,7 @@ export function TeacherRoutineTab() {
             />
           </Grid.Col>
           <Grid.Col span={2}>
-            <Button 
-              leftSection={<IconRefresh size={18} />} 
-              onClick={() => refetch()} 
-              loading={isLoading}
-              fullWidth
-              mt={28}
-              variant="light"
-            >
+            <Button leftSection={<IconRefresh size={18} />} onClick={() => refetch()} loading={isLoading} fullWidth mt={28} variant="light">
               Refresh
             </Button>
           </Grid.Col>
@@ -174,7 +147,7 @@ export function TeacherRoutineTab() {
         <Card withBorder shadow="sm" p="md" radius="md" bg="blue.0">
           <Group justify="space-between">
             <Group>
-              <IconUser size={28} color="blue" />
+              <ThemeIcon size={28} color="blue" variant="light"><IconUser size={20} /></ThemeIcon>
               <div>
                 <Title order={3}>{selectedTeacherDetails.name}</Title>
                 <Text size="sm" c="dimmed">Teacher ID: {selectedTeacherDetails.teacherId}</Text>
@@ -183,9 +156,7 @@ export function TeacherRoutineTab() {
                 <IconEye size={18} />
               </ActionIcon>
             </Group>
-            <Badge size="lg" variant="filled" color="blue">
-              {scheduleRows.length} Periods
-            </Badge>
+            <Badge size="lg" variant="filled" color="blue">{scheduleRows.length} Periods</Badge>
           </Group>
         </Card>
       )}
@@ -204,46 +175,24 @@ export function TeacherRoutineTab() {
             <Group gap="md">
               <IconClock size={24} color="white" />
               <Title order={3} c="white">Weekly Schedule</Title>
-              <Badge size="lg" variant="white" color="dark">
-                {selectedTeacherDetails?.name}
-              </Badge>
+              <Badge size="lg" variant="white" color="dark">{selectedTeacherDetails?.name}</Badge>
             </Group>
           </Box>
           <ScrollArea style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 400px)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f1f5f9' }}>
-                  <th style={{ position: 'sticky', left: 0, backgroundColor: '#f1f5f9', minWidth: 100, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, fontSize: '14px' }}>
-                    Period
-                  </th>
-                  <th style={{ minWidth: 180, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, backgroundColor: '#f1f5f9' }}>
-                    Class
-                  </th>
-                  <th style={{ minWidth: 120, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, backgroundColor: '#f1f5f9' }}>
-                    Section
-                  </th>
-                  <th style={{ minWidth: 180, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, backgroundColor: '#f1f5f9' }}>
-                    Subject(s)
-                  </th>
-                  <th style={{ minWidth: 200, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, backgroundColor: '#f1f5f9' }}>
-                    Days
-                  </th>
+                  <th style={{ position: 'sticky', left: 0, backgroundColor: '#f1f5f9', minWidth: 80, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700 }}>Period</th>
+                  <th style={{ minWidth: 180, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, backgroundColor: '#f1f5f9' }}>Class</th>
+                  <th style={{ minWidth: 100, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, backgroundColor: '#f1f5f9' }}>Section</th>
+                  <th style={{ minWidth: 150, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, backgroundColor: '#f1f5f9' }}>Subject</th>
+                  <th style={{ minWidth: 180, padding: '14px', border: '1px solid #e2e8f0', fontWeight: 700, backgroundColor: '#f1f5f9' }}>Days</th>
                 </tr>
               </thead>
               <tbody>
                 {scheduleRows.map((row, rowIdx) => (
                   <tr key={row.period} style={{ backgroundColor: rowIdx % 2 === 0 ? '#ffffff' : '#fafcff' }}>
-                    <td style={{ 
-                      position: 'sticky', 
-                      left: 0, 
-                      backgroundColor: 'inherit', 
-                      fontWeight: 700, 
-                      fontSize: '16px',
-                      padding: '16px 12px', 
-                      border: '1px solid #e2e8f0',
-                      textAlign: 'center',
-                      verticalAlign: 'middle'
-                    }}>
+                    <td style={{ position: 'sticky', left: 0, backgroundColor: 'inherit', textAlign: 'center', verticalAlign: 'middle', padding: '16px', border: '1px solid #e2e8f0' }}>
                       <Badge size="xl" variant="filled" color="blue" radius="md" style={{ fontSize: '14px', padding: '6px 12px' }}>
                         {row.period}
                       </Badge>
@@ -251,7 +200,7 @@ export function TeacherRoutineTab() {
                     <td style={{ padding: '12px', border: '1px solid #e2e8f0', verticalAlign: 'top' }}>
                       <Stack gap={8}>
                         {row.entries.map((entry, idx) => (
-                          <Text key={idx} fw={500} size="sm">{entry.className}</Text>
+                          <Text key={idx} fw={500}>{entry.className}</Text>
                         ))}
                       </Stack>
                     </td>
@@ -265,17 +214,7 @@ export function TeacherRoutineTab() {
                     <td style={{ padding: '12px', border: '1px solid #e2e8f0', verticalAlign: 'top' }}>
                       <Stack gap={8}>
                         {row.entries.map((entry, idx) => (
-                          <div key={idx}>
-                            {entry.subjectsList.length > 1 ? (
-                              <Group gap={4}>
-                                {entry.subjectsList.map((subj, sIdx) => (
-                                  <Badge key={sIdx} color="green" variant="light" size="sm">{subj}</Badge>
-                                ))}
-                              </Group>
-                            ) : (
-                              <Badge color="green" variant="light" size="sm">{entry.subject}</Badge>
-                            )}
-                          </div>
+                          <Badge key={idx} color="green" variant="light" size="sm">{entry.subject}</Badge>
                         ))}
                       </Stack>
                     </td>
@@ -283,11 +222,9 @@ export function TeacherRoutineTab() {
                       <Stack gap={8}>
                         {row.entries.map((entry, idx) => (
                           <Group key={idx} gap={4}>
-                            {entry.days.map((day, dIdx) => (
-                              <Tooltip key={dIdx} label={`${DAYS[day.day]}: ${day.subject}`} withArrow>
-                                <Badge size="sm" variant="outline" color="blue" radius="xl" style={{ cursor: 'pointer' }}>
-                                  {day.dayAbbr}
-                                </Badge>
+                            {entry.days.map((day) => (
+                              <Tooltip key={day} label={Object.keys(DAY_ABBR).find(k => DAY_ABBR[k as keyof typeof DAY_ABBR] === day) || day} withArrow>
+                                <Badge size="sm" variant="outline" color="blue" radius="xl">{day}</Badge>
                               </Tooltip>
                             ))}
                           </Group>
@@ -302,7 +239,6 @@ export function TeacherRoutineTab() {
         </Paper>
       )}
 
-      {/* Summary Section */}
       {scheduleRows.length > 0 && (
         <Card withBorder shadow="sm" p="md" radius="md" bg="gray.0">
           <Title order={4} mb="md">Schedule Summary</Title>
@@ -315,19 +251,13 @@ export function TeacherRoutineTab() {
             </Grid.Col>
             <Grid.Col span={4}>
               <Text ta="center">
-                <Text fw={700} size="xl">
-                  {scheduleRows.reduce((sum, row) => sum + row.entries.length, 0)}
-                </Text>
-                <Text size="sm" c="dimmed">Total Class Assignments</Text>
+                <Text fw={700} size="xl">{scheduleRows.reduce((sum, row) => sum + row.entries.length, 0)}</Text>
+                <Text size="sm" c="dimmed">Class Assignments</Text>
               </Text>
             </Grid.Col>
             <Grid.Col span={4}>
               <Text ta="center">
-                <Text fw={700} size="xl">
-                  {[...new Set(scheduleRows.flatMap(row => 
-                    row.entries.flatMap(e => e.subjectsList)
-                  ))].length}
-                </Text>
+                <Text fw={700} size="xl">{[...new Set(scheduleRows.flatMap(row => row.entries.map(e => e.subject)))].length}</Text>
                 <Text size="sm" c="dimmed">Unique Subjects</Text>
               </Text>
             </Grid.Col>

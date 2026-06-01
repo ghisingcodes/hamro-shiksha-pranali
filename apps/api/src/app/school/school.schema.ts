@@ -4,7 +4,10 @@ import { Document } from 'mongoose';
 @Schema({ timestamps: true })
 export class School extends Document {
   @Prop({ required: true, unique: true })
-  schoolId: string; // Auto-generated: SCH-YYYY-00001
+  schoolId: string;
+
+  @Prop({ required: true, unique: true })
+  slug: string; // URL-friendly name: "united-english-boarding-school"
 
   @Prop({ required: true })
   name: string;

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
 import { SchoolService } from './school.service';
 import { CreateSchoolDto, UpdateSchoolDto } from './school.dto';
 
@@ -16,6 +16,11 @@ export class SchoolController {
     return this.schoolService.findAll();
   }
 
+  @Get('by-slug/:slug')
+  findBySlug(@Param('slug') slug: string) {
+    return this.schoolService.findBySlug(slug);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.schoolService.findOne(id);
@@ -29,11 +34,5 @@ export class SchoolController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.schoolService.remove(id);
-  }
-
-  @Get('current/settings')
-  getCurrentSchoolSettings(@Request() req: any) {
-    const schoolId = req.user?.schoolId;
-    return this.schoolService.getSchoolSettings(schoolId);
   }
 }

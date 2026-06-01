@@ -50,6 +50,9 @@ export class User extends Document {
   @Prop({ default: false })
   isEmailVerified: boolean;
 
+  @Prop({ default: false })
+  passwordChanged: boolean;  // ← ADD THIS FIELD
+
   @Prop()
   profilePicture?: string;
 }

@@ -1,10 +1,12 @@
+// apps/api/src/app/app.module.ts
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { AcademicSeasonModule } from './academic-season/academic-season.module';
 import { ClassModule } from './class/class.module';
-import { ClassSectionModule } from './class-section/class-section.module';
+import { SectionModule } from './section/section.module';
+import { SubjectModule } from './subject/subject.module';
 import { StudentModule } from './student/student.module';
 import { AcademicRecordModule } from './academic-record/academic-record.module';
 import { EnrollmentRecordModule } from './enrollment-record/enrollment-record.module';
@@ -14,8 +16,6 @@ import { StudentActivityModule } from './student-activity/student-activity.modul
 import { UserModule } from './user/user.module';
 import { StaffModule } from './staff/staff.module';
 import { SchoolModule } from './school/school.module';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -30,18 +30,17 @@ import { AppService } from './app.service';
     AuthModule,
     AcademicSeasonModule,
     ClassModule,
-    ClassSectionModule,
-    TeacherModule,
+    SectionModule,
+    SubjectModule,
     StudentModule,
     AcademicRecordModule,
     EnrollmentRecordModule,
+    TeacherModule,
     AttendanceModule,
     StudentActivityModule,
     UserModule,
     StaffModule,
     SchoolModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

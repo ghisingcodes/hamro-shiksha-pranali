@@ -1,25 +1,74 @@
-// apps/api/src/app/class-section/class-section.dto.ts
-import { IsString, IsMongoId, IsArray, ValidateNested, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsMongoId, IsArray, ValidateNested, IsNumber, IsOptional, IsDate, IsEnum, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
-class RoutineEntryDto {
+export class AddSectionDto {
+  @IsString()
+  name: string;
+}
+
+export class RenameSectionDto {
+  @IsString()
+  newName: string;
+}
+
+export class UpdateTeacherAssignmentDto {
+  @IsNumber()
+  period: number;
+
+  @IsMongoId()
+  teacherId: string;
+
   @IsString()
   @IsOptional()
   subject?: string;
 
-  @IsString()
+  @IsArray()
+  @IsEnum(['M', 'T', 'W', 'Th', 'F'], { each: true })
   @IsOptional()
-  teacher?: string;
+  days?: string[];
 }
 
-class SectionDto {
+export class TeacherAssignmentDto {
+  @IsMongoId()
+  teacherId: string;
+
+  @IsArray()
+  @IsEnum(['M', 'T', 'W', 'Th', 'F'], { each: true })
+  days: string[];
+
+  @IsDate()
+  @Type(() => Date)
+  @IsOptional()
+  assignedDate?: Date;
+}
+
+export class PeriodTeacherDto {
+  @IsNumber()
+  @Min(1)
+  @Max(7)
+  period: number;
+
   @IsString()
-  name: string;
+  subject: string;
 
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => RoutineEntryDto)
-  routine: RoutineEntryDto[][];
+  @Type(() => TeacherAssignmentDto)
+  assignments: TeacherAssignmentDto[];
+}
+
+export class SectionDto {
+  @IsString()
+  name: string;
+
+  @IsMongoId()
+  @IsOptional()
+  currentClassTeacherId?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PeriodTeacherDto)
+  periodTeachers: PeriodTeacherDto[];
 }
 
 export class CreateClassSectionDto {
@@ -29,31 +78,53 @@ export class CreateClassSectionDto {
   @IsMongoId()
   seasonId: string;
 
+  @IsMongoId()
+  schoolId: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SectionDto)
-  @IsOptional()
-  sections?: SectionDto[];
+  sections: SectionDto[];
+}
 
+export class AssignClassTeacherDto {
   @IsMongoId()
+  teacherId: string;
+
+  @IsDate()
+  @Type(() => Date)
   @IsOptional()
-  schoolId?: string;
+  assignedDate?: Date;
 }
 
-export class AddSectionDto {
-  @IsString()
-  name: string;
-}
-
-export class UpdateRoutineDto {
-  @IsNumber()
-  sectionIndex: number;
-  @IsNumber()
-  day: number;
+export class AssignPeriodTeacherDto {
   @IsNumber()
   period: number;
+
   @IsString()
   subject: string;
-  @IsString()
-  teacher: string;
+
+  @IsMongoId()
+  teacherId: string;
+
+  @IsArray()
+  @IsEnum(['M', 'T', 'W', 'Th', 'F'], { each: true })
+  days: string[];
+
+  @IsDate()
+  @Type(() => Date)
+  @IsOptional()
+  assignedDate?: Date;
+}
+
+export class EndTeacherAssignmentDto {
+  @IsNumber()
+  period: number;
+
+  @IsMongoId()
+  teacherId: string;
+
+  @IsDate()
+  @Type(() => Date)
+  endDate: Date;
 }

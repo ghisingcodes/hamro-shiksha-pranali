@@ -5,6 +5,9 @@ export class CreateSchoolDto {
   name: string;
 
   @IsString()
+  slug: string; // Add slug field
+
+  @IsString()
   @IsOptional()
   address?: string;
 

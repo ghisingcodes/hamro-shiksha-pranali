@@ -9,8 +9,8 @@ export class SchoolService {
   constructor(@InjectModel(School.name) private schoolModel: Model<School>) {}
 
   async create(dto: CreateSchoolDto) {
-    const existing = await this.schoolModel.findOne({ name: dto.name });
-    if (existing) throw new BadRequestException('School already exists');
+    const existing = await this.schoolModel.findOne({ $or: [{ name: dto.name }, { slug: dto.slug }] });
+    if (existing) throw new BadRequestException('School with this name or slug already exists');
 
     const year = new Date().getFullYear();
     const count = await this.schoolModel.countDocuments();
@@ -22,6 +22,12 @@ export class SchoolService {
 
   async findAll() {
     return this.schoolModel.find().exec();
+  }
+
+  async findBySlug(slug: string) {
+    const school = await this.schoolModel.findOne({ slug, isActive: true });
+    if (!school) throw new NotFoundException('School not found');
+    return school;
   }
 
   async findOne(id: string) {
@@ -40,19 +46,5 @@ export class SchoolService {
     const result = await this.schoolModel.deleteOne({ _id: id });
     if (result.deletedCount === 0) throw new NotFoundException();
     return { success: true };
-  }
-
-  async getSchoolSettings(schoolId: string) {
-    const school = await this.schoolModel.findById(schoolId);
-    if (!school) throw new NotFoundException('School not found');
-    return {
-      name: school.name,
-      logo: school.schoolLogo,
-      coverPhoto: school.coverPhoto,
-      themeColor: school.themeColor,
-      address: school.address,
-      phone: school.phone,
-      email: school.email,
-    };
   }
 }

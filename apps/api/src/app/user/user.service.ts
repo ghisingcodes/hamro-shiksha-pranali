@@ -20,6 +20,7 @@ export class UserService {
     const user = new this.userModel({
       ...dto,
       password: hashedPassword,
+      passwordChanged: dto.passwordChanged ?? false,
     });
     return user.save();
   }
@@ -36,7 +37,7 @@ export class UserService {
     await user.save();
 
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role },
+      { id: user._id, email: user.email, role: user.role, passwordChanged: user.passwordChanged },
       this.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -49,13 +50,36 @@ export class UserService {
         email: user.email,
         role: user.role,
         permissions: user.permissions,
+        passwordChanged: user.passwordChanged,
       },
     };
   }
 
-  async changePassword(dto: ChangePasswordDto) {
-    // Implementation would need current user context
-    throw new Error('Method requires user context');
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const isPasswordValid = await bcrypt.compare(dto.oldPassword, user.password);
+    if (!isPasswordValid) throw new UnauthorizedException('Current password is incorrect');
+
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+    user.password = hashedPassword;
+    user.passwordChanged = true;  // ← MARK AS CHANGED
+    await user.save();
+
+    return { success: true, message: 'Password changed successfully' };
+  }
+
+  async resetPassword(userId: string, newPassword: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.passwordChanged = true;
+    await user.save();
+
+    return { success: true, message: 'Password reset successfully' };
   }
 
   async findAll(role?: string, schoolId?: string) {
@@ -72,10 +96,17 @@ export class UserService {
   }
 
   async update(id: string, dto: UpdateUserDto) {
+    const updateData: any = { ...dto };
+    
     if (dto.password) {
-      dto.password = await bcrypt.hash(dto.password, 10);
+      updateData.password = await bcrypt.hash(dto.password, 10);
+      updateData.passwordChanged = true;
     }
-    const updated = await this.userModel.findByIdAndUpdate(id, dto, { new: true });
+    
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+    
+    const updated = await this.userModel.findByIdAndUpdate(id, updateData, { new: true });
     if (!updated) throw new NotFoundException();
     return updated;
   }
@@ -92,5 +123,17 @@ export class UserService {
     user.isActive = !user.isActive;
     await user.save();
     return user;
+  }
+
+
+  async updatePassword(id: string, password: string, passwordChanged: boolean = true) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const updated = await this.userModel.findByIdAndUpdate(
+      id, 
+      { password: hashedPassword, passwordChanged },
+      { new: true }
+    );
+    if (!updated) throw new NotFoundException();
+    return updated;
   }
 }

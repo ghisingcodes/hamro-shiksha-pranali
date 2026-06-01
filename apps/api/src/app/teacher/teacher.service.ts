@@ -82,6 +82,7 @@ export class TeacherService {
           teacherId: teacher._id,
           schoolId: new Types.ObjectId(schoolId),
           isActive: true,
+          passwordChanged: false,  // ← ADD THIS
         });
         await user.save();
         

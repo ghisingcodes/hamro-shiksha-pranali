@@ -3,11 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Button, Modal, TextInput, Select, Group, Title, Stack, Loader, Alert, Badge,
   Tooltip, ActionIcon, Textarea, MultiSelect, NumberInput, Paper, Divider,
-  Switch, Table, Grid, ThemeIcon, ScrollArea, Text
+  Switch, Table, Grid, ThemeIcon, ScrollArea, Text, PasswordInput
 } from '@mantine/core';
 import { IconUserPlus, IconEdit, IconTrash, IconUser, IconRefresh, 
          IconBriefcase, IconDoorExit, IconBook, IconId, IconMail, IconPhone,
-         IconCalendar, IconEye, IconLock, IconLockOpen } from '@tabler/icons-react';
+         IconCalendar, IconEye, IconLock, IconLockOpen, IconKey } from '@tabler/icons-react';
 import { createColumnHelper, useReactTable, getCoreRowModel, getPaginationRowModel } from '@tanstack/react-table';
 import { api } from '../lib/api';
 import { notifications } from '@mantine/notifications';
@@ -50,6 +50,8 @@ const STATUS_LABELS: Record<string, string> = {
   contract_ended: '📄 Contract Ended',
 };
 
+const DEFAULT_PASSWORD = '0123456789';
+
 interface Teacher {
   _id: string;
   teacherId: string;
@@ -60,7 +62,7 @@ interface Teacher {
   qualification?: string;
   experience?: number;
   subjects: string[];
-  userId?: { _id: string; email: string; name: string; isActive: boolean } | null;
+  userId?: { _id: string; email: string; name: string; isActive: boolean; passwordChanged?: boolean } | null;
   status: string;
   employmentType: string;
   contractEndDate?: string;
@@ -69,6 +71,8 @@ interface Teacher {
   joiningDate?: string;
   isActive: boolean;
   contractHistory?: Array<{ seasonId: string; renewalDate: string; endDate: string }>;
+  defaultPassword?: string;
+  passwordChanged?: boolean;
 }
 
 interface AcademicSeason {
@@ -84,6 +88,7 @@ export function TeachersPage() {
   const [renewModalOpen, { open: openRenewModal, close: closeRenewModal }] = useDisclosure(false);
   const [leaveModalOpen, { open: openLeaveModal, close: closeLeaveModal }] = useDisclosure(false);
   const [detailModalOpen, { open: openDetailModalDisclosure, close: closeDetailModal }] = useDisclosure(false);
+  const [passwordModalOpen, { open: openPasswordModal, close: closePasswordModal }] = useDisclosure(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [formData, setFormData] = useState({
@@ -98,7 +103,7 @@ export function TeachersPage() {
   });
   const [renewForm, setRenewForm] = useState({ seasonId: '' });
   const [leaveForm, setLeaveForm] = useState({ reason: '' });
-  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [resetPasswordForm, setResetPasswordForm] = useState({ password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD });
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const schoolId = user.schoolId;
@@ -120,7 +125,8 @@ export function TeachersPage() {
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       closeModal();
       const defaultPassword = res.data?.defaultPassword;
-      if (defaultPassword) {
+      const passwordChanged = res.data?.passwordChanged;
+      if (defaultPassword && !passwordChanged) {
         notifications.show({ 
           title: 'Success', 
           message: `Teacher added! Default password: ${defaultPassword}`, 
@@ -160,6 +166,23 @@ export function TeachersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       notifications.show({ title: 'Success', message: 'User status updated', color: 'green' });
+    },
+    onError: (err: any) => {
+      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to update status', color: 'red' });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      return api.post(`/users/${userId}/reset-password`, { password });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      closePasswordModal();
+      notifications.show({ title: 'Success', message: 'Password reset successfully', color: 'green' });
+    },
+    onError: (err: any) => {
+      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to reset password', color: 'red' });
     },
   });
 
@@ -210,11 +233,30 @@ export function TeachersPage() {
   };
 
   const handleToggleUserStatus = (teacher: Teacher) => {
-    if (teacher.userId) {
+    if (teacher.userId?._id) {
       toggleUserStatusMutation.mutate({ 
         userId: teacher.userId._id, 
-        isActive: !(teacher.userId as any).isActive 
+        isActive: !teacher.userId.isActive 
       });
+    }
+  };
+
+  const handleResetPassword = () => {
+    if (selectedTeacher?.userId && resetPasswordForm.password === resetPasswordForm.confirmPassword) {
+      resetPasswordMutation.mutate({
+        userId: selectedTeacher.userId._id,
+        password: resetPasswordForm.password
+      });
+    } else {
+      notifications.show({ title: 'Error', message: 'Passwords do not match', color: 'red' });
+    }
+  };
+
+  const openResetPasswordModal = (teacher: Teacher) => {
+    if (teacher.userId?._id) {
+      setSelectedTeacher(teacher);
+      setResetPasswordForm({ password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD });
+      openPasswordModal();
     }
   };
 
@@ -277,26 +319,40 @@ export function TeachersPage() {
     columnHelper.display({
       id: 'userAccount',
       header: 'User',
-      size: 120,
+      size: 150,
       cell: ({ row }) => (
-        row.original.userId ? (
-          <Group gap={4}>
-            <Badge color={row.original.userId.isActive ? 'green' : 'red'}>
-              {row.original.userId.isActive ? '✅ Active' : '❌ Inactive'}
-            </Badge>
-            <Tooltip label={row.original.userId.isActive ? 'Disable User' : 'Enable User'}>
-              <ActionIcon 
-                size="sm" 
-                color={row.original.userId.isActive ? 'red' : 'green'}
-                onClick={() => handleToggleUserStatus(row.original)}
-              >
-                {row.original.userId.isActive ? <IconLock size={14} /> : <IconLockOpen size={14} />}
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        ) : (
-          <Badge color="orange">⏳ No Account</Badge>
-        )
+        <Group gap={4}>
+          {row.original.userId ? (
+            <>
+              <Badge color={row.original.userId.isActive ? 'green' : 'red'}>
+                {row.original.userId.isActive ? '✅ Active' : '❌ Inactive'}
+              </Badge>
+              {!row.original.passwordChanged && (
+                <Badge color="yellow">Default Password</Badge>
+              )}
+              <Tooltip label={row.original.userId.isActive ? 'Disable User' : 'Enable User'}>
+                <ActionIcon 
+                  size="sm" 
+                  color={row.original.userId.isActive ? 'red' : 'green'}
+                  onClick={() => handleToggleUserStatus(row.original)}
+                >
+                  {row.original.userId.isActive ? <IconLock size={14} /> : <IconLockOpen size={14} />}
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Reset Password">
+                <ActionIcon 
+                  size="sm" 
+                  color="blue"
+                  onClick={() => openResetPasswordModal(row.original)}
+                >
+                  <IconKey size={14} />
+                </ActionIcon>
+              </Tooltip>
+            </>
+          ) : (
+            <Badge color="orange">⏳ No Account</Badge>
+          )}
+        </Group>
       ),
     }),
     columnHelper.display({
@@ -394,6 +450,7 @@ export function TeachersPage() {
           <MultiSelect label="Subjects" data={SUBJECTS_LIST} value={formData.subjects} onChange={(val) => setFormData({...formData, subjects: val})} searchable clearable />
           <Alert color="blue" mt="md">
             A user account will be automatically created for this teacher using the provided email.
+            Default password: <strong>{DEFAULT_PASSWORD}</strong>
           </Alert>
         </Stack>
         <Group justify="flex-end" mt="md">
@@ -402,7 +459,34 @@ export function TeachersPage() {
         </Group>
       </Modal>
 
-      {/* Teacher Details Modal */}
+      {/* Reset Password Modal */}
+      <Modal opened={passwordModalOpen} onClose={closePasswordModal} title={`Reset Password - ${selectedTeacher?.name}`} size="md">
+        <Stack>
+          <Alert color="blue" variant="light" mb="md">
+            Default password is: <strong>{DEFAULT_PASSWORD}</strong>
+          </Alert>
+          <PasswordInput
+            label="New Password"
+            placeholder="Enter new password"
+            value={resetPasswordForm.password}
+            onChange={(e) => setResetPasswordForm({...resetPasswordForm, password: e.target.value})}
+            required
+          />
+          <PasswordInput
+            label="Confirm Password"
+            placeholder="Confirm new password"
+            value={resetPasswordForm.confirmPassword}
+            onChange={(e) => setResetPasswordForm({...resetPasswordForm, confirmPassword: e.target.value})}
+            required
+          />
+        </Stack>
+        <Group justify="flex-end" mt="md">
+          <Button variant="default" onClick={closePasswordModal}>Cancel</Button>
+          <Button onClick={handleResetPassword} color="blue">Reset Password</Button>
+        </Group>
+      </Modal>
+
+      {/* Teacher Details Modal - Same as before */}
       <Modal opened={detailModalOpen} onClose={closeDetailModal} title="Teacher Details" size="xl" scrollAreaComponent={ScrollArea}>
         {selectedTeacher && (
           <Stack>
@@ -417,181 +501,81 @@ export function TeachersPage() {
               <Divider mb="md" />
               <Grid>
                 <Grid.Col span={6}>
-                  <Group>
-                    <IconId size={16} color="gray" />
-                    <Text fw={500}>Teacher ID:</Text>
-                    <Text>{selectedTeacher.teacherId}</Text>
-                  </Group>
+                  <Group><IconId size={16} color="gray" /><Text fw={500}>Teacher ID:</Text><Text>{selectedTeacher.teacherId}</Text></Group>
                 </Grid.Col>
                 <Grid.Col span={6}>
-                  <Group>
-                    <IconUser size={16} color="gray" />
-                    <Text fw={500}>Name:</Text>
-                    <Text>{selectedTeacher.name}</Text>
-                  </Group>
+                  <Group><IconUser size={16} color="gray" /><Text fw={500}>Name:</Text><Text>{selectedTeacher.name}</Text></Group>
                 </Grid.Col>
                 <Grid.Col span={6}>
-                  <Group>
-                    <IconPhone size={16} color="gray" />
-                    <Text fw={500}>Phone:</Text>
-                    <Text>{selectedTeacher.phone || '—'}</Text>
-                  </Group>
+                  <Group><IconPhone size={16} color="gray" /><Text fw={500}>Phone:</Text><Text>{selectedTeacher.phone || '—'}</Text></Group>
                 </Grid.Col>
                 <Grid.Col span={6}>
-                  <Group>
-                    <IconMail size={16} color="gray" />
-                    <Text fw={500}>Email:</Text>
-                    <Text>{selectedTeacher.email || '—'}</Text>
-                  </Group>
+                  <Group><IconMail size={16} color="gray" /><Text fw={500}>Email:</Text><Text>{selectedTeacher.email || '—'}</Text></Group>
                 </Grid.Col>
                 <Grid.Col span={12}>
-                  <Group>
-                    <IconBriefcase size={16} color="gray" />
-                    <Text fw={500}>Address:</Text>
-                    <Text>{selectedTeacher.address || '—'}</Text>
-                  </Group>
+                  <Group><IconBriefcase size={16} color="gray" /><Text fw={500}>Address:</Text><Text>{selectedTeacher.address || '—'}</Text></Group>
                 </Grid.Col>
                 <Grid.Col span={6}>
-                  <Group>
-                    <IconBook size={16} color="gray" />
-                    <Text fw={500}>Qualification:</Text>
-                    <Text>{selectedTeacher.qualification || '—'}</Text>
-                  </Group>
+                  <Group><IconBook size={16} color="gray" /><Text fw={500}>Qualification:</Text><Text>{selectedTeacher.qualification || '—'}</Text></Group>
                 </Grid.Col>
                 <Grid.Col span={6}>
-                  <Group>
-                    <IconCalendar size={16} color="gray" />
-                    <Text fw={500}>Experience:</Text>
-                    <Text>{selectedTeacher.experience || 0} years</Text>
-                  </Group>
+                  <Group><IconCalendar size={16} color="gray" /><Text fw={500}>Experience:</Text><Text>{selectedTeacher.experience || 0} years</Text></Group>
                 </Grid.Col>
               </Grid>
             </Paper>
 
             {/* Employment Details Section */}
             <Paper withBorder p="md" radius="md">
-              <Group mb="md">
-                <ThemeIcon size="lg" color="green" variant="light" radius="xl">
-                  <IconBriefcase size={20} />
-                </ThemeIcon>
-                <Title order={4}>Employment Details</Title>
-              </Group>
+              <Group mb="md"><ThemeIcon size="lg" color="green" variant="light" radius="xl"><IconBriefcase size={20} /></ThemeIcon><Title order={4}>Employment Details</Title></Group>
               <Divider mb="md" />
               <Grid>
-                <Grid.Col span={4}>
-                  <Text fw={500}>Employment Type:</Text>
-                  <Badge variant="light" size="lg">{selectedTeacher.employmentType}</Badge>
-                </Grid.Col>
-                <Grid.Col span={4}>
-                  <Text fw={500}>Status:</Text>
-                  <Badge color={getStatusColor(selectedTeacher.status)} size="lg">
-                    {getStatusLabel(selectedTeacher.status)}
-                  </Badge>
-                </Grid.Col>
-                <Grid.Col span={4}>
-                  <Text fw={500}>Contract End Date:</Text>
-                  <Text>{selectedTeacher.contractEndDate ? new Date(selectedTeacher.contractEndDate).toLocaleDateString() : '—'}</Text>
-                </Grid.Col>
-                {selectedTeacher.lastWorkingDate && (
-                  <Grid.Col span={6}>
-                    <Text fw={500}>Last Working Day:</Text>
-                    <Text>{new Date(selectedTeacher.lastWorkingDate).toLocaleDateString()}</Text>
-                  </Grid.Col>
-                )}
-                {selectedTeacher.reasonForLeave && (
-                  <Grid.Col span={12}>
-                    <Text fw={500}>Reason for Leave:</Text>
-                    <Text>{selectedTeacher.reasonForLeave}</Text>
-                  </Grid.Col>
-                )}
+                <Grid.Col span={4}><Text fw={500}>Employment Type:</Text><Badge variant="light" size="lg">{selectedTeacher.employmentType}</Badge></Grid.Col>
+                <Grid.Col span={4}><Text fw={500}>Status:</Text><Badge color={getStatusColor(selectedTeacher.status)} size="lg">{getStatusLabel(selectedTeacher.status)}</Badge></Grid.Col>
+                <Grid.Col span={4}><Text fw={500}>Contract End Date:</Text><Text>{selectedTeacher.contractEndDate ? new Date(selectedTeacher.contractEndDate).toLocaleDateString() : '—'}</Text></Grid.Col>
+                {selectedTeacher.lastWorkingDate && <Grid.Col span={6}><Text fw={500}>Last Working Day:</Text><Text>{new Date(selectedTeacher.lastWorkingDate).toLocaleDateString()}</Text></Grid.Col>}
+                {selectedTeacher.reasonForLeave && <Grid.Col span={12}><Text fw={500}>Reason for Leave:</Text><Text>{selectedTeacher.reasonForLeave}</Text></Grid.Col>}
               </Grid>
             </Paper>
 
             {/* Subjects Section */}
             <Paper withBorder p="md" radius="md">
-              <Group mb="md">
-                <ThemeIcon size="lg" color="orange" variant="light" radius="xl">
-                  <IconBook size={20} />
-                </ThemeIcon>
-                <Title order={4}>Subjects</Title>
-              </Group>
+              <Group mb="md"><ThemeIcon size="lg" color="orange" variant="light" radius="xl"><IconBook size={20} /></ThemeIcon><Title order={4}>Subjects</Title></Group>
               <Divider mb="md" />
-              <Group gap={4}>
-                {selectedTeacher.subjects?.length > 0 ? (
-                  selectedTeacher.subjects.map(s => <Badge key={s} size="md" variant="filled">{s}</Badge>)
-                ) : (
-                  <Text c="dimmed">No subjects assigned</Text>
-                )}
-              </Group>
+              <Group gap={4}>{selectedTeacher.subjects?.length > 0 ? selectedTeacher.subjects.map(s => <Badge key={s} size="md" variant="filled">{s}</Badge>) : <Text c="dimmed">No subjects assigned</Text>}</Group>
             </Paper>
 
             {/* User Account Section */}
             <Paper withBorder p="md" radius="md">
               <Group mb="md" justify="space-between">
-                <Group>
-                  <ThemeIcon size="lg" color="violet" variant="light" radius="xl">
-                    <IconUser size={20} />
-                  </ThemeIcon>
-                  <Title order={4}>User Account</Title>
-                </Group>
-                {selectedTeacher.userId && (
-                  <Switch
-                    label={selectedTeacher.userId.isActive ? 'Active' : 'Inactive'}
-                    checked={selectedTeacher.userId.isActive}
-                    onChange={() => handleToggleUserStatus(selectedTeacher)}
-                    color="green"
-                    size="md"
-                  />
-                )}
+                <Group><ThemeIcon size="lg" color="violet" variant="light" radius="xl"><IconUser size={20} /></ThemeIcon><Title order={4}>User Account</Title></Group>
+                {selectedTeacher.userId && <Switch label={selectedTeacher.userId.isActive ? 'Active' : 'Inactive'} checked={selectedTeacher.userId.isActive} onChange={() => handleToggleUserStatus(selectedTeacher)} color="green" size="md" />}
               </Group>
               <Divider mb="md" />
               {selectedTeacher.userId ? (
                 <Grid>
-                  <Grid.Col span={6}>
-                    <Text fw={500}>Email:</Text>
-                    <Text>{(selectedTeacher.userId as any)?.email}</Text>
-                  </Grid.Col>
-                  <Grid.Col span={6}>
-                    <Text fw={500}>Status:</Text>
-                    <Badge color={selectedTeacher.userId.isActive ? 'green' : 'red'}>
-                      {selectedTeacher.userId.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </Grid.Col>
+                  <Grid.Col span={6}><Text fw={500}>Email:</Text><Text>{(selectedTeacher.userId as any)?.email}</Text></Grid.Col>
+                  <Grid.Col span={6}><Text fw={500}>Status:</Text><Badge color={selectedTeacher.userId.isActive ? 'green' : 'red'}>{selectedTeacher.userId.isActive ? 'Active' : 'Inactive'}</Badge></Grid.Col>
+                  {!selectedTeacher.passwordChanged && (
+                    <Grid.Col span={12}>
+                      <Alert color="yellow" variant="light">
+                        ⚠️ Using default password. Please reset the password for security.
+                      </Alert>
+                    </Grid.Col>
+                  )}
                 </Grid>
               ) : (
-                <Alert color="orange" variant="light">
-                  No user account associated with this teacher.
-                </Alert>
+                <Alert color="orange" variant="light">No user account associated with this teacher.</Alert>
               )}
             </Paper>
 
             {/* Contract History Section */}
             {selectedTeacher.contractHistory && selectedTeacher.contractHistory.length > 0 && (
               <Paper withBorder p="md" radius="md">
-                <Group mb="md">
-                  <ThemeIcon size="lg" color="teal" variant="light" radius="xl">
-                    <IconCalendar size={20} />
-                  </ThemeIcon>
-                  <Title order={4}>Contract History</Title>
-                </Group>
+                <Group mb="md"><ThemeIcon size="lg" color="teal" variant="light" radius="xl"><IconCalendar size={20} /></ThemeIcon><Title order={4}>Contract History</Title></Group>
                 <Divider mb="md" />
                 <Table striped highlightOnHover>
-                  <thead>
-                    <tr>
-                      <th>Season</th>
-                      <th>Renewal Date</th>
-                      <th>End Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedTeacher.contractHistory.map((history, idx) => (
-                      <tr key={idx}>
-                        <td>{(history as any).seasonId?.name || 'Unknown'}</td>
-                        <td>{new Date(history.renewalDate).toLocaleDateString()}</td>
-                        <td>{new Date(history.endDate).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
+                  <thead><tr><th>Season</th><th>Renewal Date</th><th>End Date</th></tr></thead>
+                  <tbody>{selectedTeacher.contractHistory.map((history, idx) => (<tr key={idx}><td>{(history as any).seasonId?.name || 'Unknown'}</td><td>{new Date(history.renewalDate).toLocaleDateString()}</td><td>{new Date(history.endDate).toLocaleDateString()}</td></tr>))}</tbody>
                 </Table>
               </Paper>
             )}
@@ -602,42 +586,19 @@ export function TeachersPage() {
       {/* Renew Contract Modal */}
       <Modal opened={renewModalOpen} onClose={closeRenewModal} title={`Renew Contract - ${selectedTeacher?.name}`} size="md">
         <Stack>
-          <Select
-            label="Select Season"
-            data={seasons?.map(s => ({ value: s._id, label: s.name })) || []}
-            value={renewForm.seasonId}
-            onChange={(val) => setRenewForm({...renewForm, seasonId: val || ''})}
-            required
-          />
-          <Alert color="blue" mt="md" variant="light">
-            The contract will be renewed with end date set to one year after the season ends.
-          </Alert>
+          <Select label="Select Season" data={seasons?.map(s => ({ value: s._id, label: s.name })) || []} value={renewForm.seasonId} onChange={(val) => setRenewForm({...renewForm, seasonId: val || ''})} required />
+          <Alert color="blue" mt="md" variant="light">The contract will be renewed with end date set to one year after the season ends.</Alert>
         </Stack>
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={closeRenewModal}>Cancel</Button>
-          <Button onClick={handleRenewContract}>Renew Contract</Button>
-        </Group>
+        <Group justify="flex-end" mt="md"><Button variant="default" onClick={closeRenewModal}>Cancel</Button><Button onClick={handleRenewContract}>Renew Contract</Button></Group>
       </Modal>
 
       {/* Process Leave Modal */}
       <Modal opened={leaveModalOpen} onClose={closeLeaveModal} title={`Process Leave - ${selectedTeacher?.name}`} size="md">
         <Stack>
-          <Textarea
-            label="Reason for Leave"
-            value={leaveForm.reason}
-            onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})}
-            required
-            minRows={3}
-            placeholder="Please provide the reason for leave..."
-          />
-          <Alert color="orange" mt="md" variant="light">
-            ⚠️ The last working day will be set to today's date.
-          </Alert>
+          <Textarea label="Reason for Leave" value={leaveForm.reason} onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})} required minRows={3} placeholder="Please provide the reason for leave..." />
+          <Alert color="orange" mt="md" variant="light">⚠️ The last working day will be set to today's date.</Alert>
         </Stack>
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={closeLeaveModal}>Cancel</Button>
-          <Button color="red" onClick={handleProcessLeave}>Process Leave</Button>
-        </Group>
+        <Group justify="flex-end" mt="md"><Button variant="default" onClick={closeLeaveModal}>Cancel</Button><Button color="red" onClick={handleProcessLeave}>Process Leave</Button></Group>
       </Modal>
     </Stack>
   );
