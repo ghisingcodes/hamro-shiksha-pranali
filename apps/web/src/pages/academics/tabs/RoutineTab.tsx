@@ -133,25 +133,37 @@ export function RoutineTab() {
   // Check if a teacher covers all days
   const coversAllDays = (days: string[]) => days.length === 5 && days.includes('M') && days.includes('T') && days.includes('W') && days.includes('Th') && days.includes('F');
 
-  // Get class teacher info from currentClassTeacherId
+  // Get class teacher info - FIXED: Extract string values from objects
   const getClassTeacherInfo = () => {
+    // Handle currentClassTeacherId which might be a string or an object
+    let teacherName = 'Not assigned';
+    let subjectName = 'Not assigned';
+    
     if (section?.currentClassTeacherId) {
-      const teacherId = typeof section.currentClassTeacherId === 'object' 
-        ? section.currentClassTeacherId._id 
-        : section.currentClassTeacherId;
-      const subjectId = typeof section.currentClassTeacherSubjectId === 'object' 
-        ? section.currentClassTeacherSubjectId._id 
-        : section.currentClassTeacherSubjectId;
-      
-      const teacher = teachers?.find(t => t._id === teacherId);
-      const subject = subjects?.find(s => s._id === subjectId);
-      
-      return { 
-        teacher: teacher?.name || 'Not assigned', 
-        subject: subject?.name || 'Not assigned' 
-      };
+      // If it's an object with name property
+      if (typeof section.currentClassTeacherId === 'object' && section.currentClassTeacherId !== null) {
+        teacherName = (section.currentClassTeacherId as any).name || 'Not assigned';
+      } 
+      // If it's a string, find the teacher from the teachers array
+      else if (typeof section.currentClassTeacherId === 'string') {
+        const teacher = teachers?.find(t => t._id === section.currentClassTeacherId);
+        teacherName = teacher?.name || 'Not assigned';
+      }
     }
-    return { teacher: 'Not assigned', subject: 'Not assigned' };
+    
+    if (section?.currentClassTeacherSubjectId) {
+      // If it's an object with name property
+      if (typeof section.currentClassTeacherSubjectId === 'object' && section.currentClassTeacherSubjectId !== null) {
+        subjectName = (section.currentClassTeacherSubjectId as any).name || 'Not assigned';
+      }
+      // If it's a string, find the subject from the subjects array
+      else if (typeof section.currentClassTeacherSubjectId === 'string') {
+        const subject = subjects?.find(s => s._id === section.currentClassTeacherSubjectId);
+        subjectName = subject?.name || 'Not assigned';
+      }
+    }
+    
+    return { teacher: teacherName, subject: subjectName };
   };
 
   // Assign/Update teacher mutation
@@ -359,8 +371,28 @@ export function RoutineTab() {
                         ) : (
                           <Stack gap="xs">
                             {assignments.map((assignment: any, idx: number) => {
-                              const teacher = teachers?.find(t => t._id === assignment.teacherId);
-                              const subject = subjects?.find(s => s._id === assignment.subjectId);
+                              // Safely extract teacher name
+                              let teacherName = 'Unknown';
+                              if (assignment.teacherId) {
+                                if (typeof assignment.teacherId === 'object') {
+                                  teacherName = assignment.teacherId.name || 'Unknown';
+                                } else if (typeof assignment.teacherId === 'string') {
+                                  const teacher = teachers?.find(t => t._id === assignment.teacherId);
+                                  teacherName = teacher?.name || 'Unknown';
+                                }
+                              }
+                              
+                              // Safely extract subject name
+                              let subjectName = 'Unknown';
+                              if (assignment.subjectId) {
+                                if (typeof assignment.subjectId === 'object') {
+                                  subjectName = assignment.subjectId.name || 'Unknown';
+                                } else if (typeof assignment.subjectId === 'string') {
+                                  const subject = subjects?.find(s => s._id === assignment.subjectId);
+                                  subjectName = subject?.name || 'Unknown';
+                                }
+                              }
+                              
                               const daysStr = assignment.days.map((d: string) => DAY_MAP[d]).join(', ');
                               const isFullWeek = coversAllDays(assignment.days);
                               
@@ -369,8 +401,8 @@ export function RoutineTab() {
                                   <Group justify="space-between" wrap="nowrap">
                                     <div style={{ flex: 1 }}>
                                       <Group gap="xs" wrap="wrap">
-                                        <Badge color="blue" variant="light">{subject?.name || 'Unknown'}</Badge>
-                                        <Text size="sm" fw={500}>{teacher?.name || 'Unknown'}</Text>
+                                        <Badge color="blue" variant="light">{subjectName}</Badge>
+                                        <Text size="sm" fw={500}>{teacherName}</Text>
                                         {isFullWeek ? (
                                           <Badge size="xs" color="green">📅 All Days</Badge>
                                         ) : (
@@ -385,7 +417,7 @@ export function RoutineTab() {
                                         </ActionIcon>
                                       </Tooltip>
                                       <Tooltip label="End Assignment">
-                                        <ActionIcon size="sm" color="red" variant="subtle" onClick={() => handleEndAssignment(period, assignment.teacherId, teacher?.name || 'Unknown')}>
+                                        <ActionIcon size="sm" color="red" variant="subtle" onClick={() => handleEndAssignment(period, assignment.teacherId, teacherName)}>
                                           <IconTrash size={14} />
                                         </ActionIcon>
                                       </Tooltip>
@@ -535,12 +567,32 @@ export function RoutineTab() {
             </thead>
             <tbody>
               {periodHistory.map((history, idx) => {
-                const teacher = teachers?.find(t => t._id === history.teacherId);
-                const subject = subjects?.find(s => s._id === history.subjectId);
+                // Safely extract teacher name from history
+                let teacherName = 'Unknown';
+                if (history.teacherId) {
+                  if (typeof history.teacherId === 'object') {
+                    teacherName = history.teacherId.name || 'Unknown';
+                  } else if (typeof history.teacherId === 'string') {
+                    const teacher = teachers?.find(t => t._id === history.teacherId);
+                    teacherName = teacher?.name || 'Unknown';
+                  }
+                }
+                
+                // Safely extract subject name from history
+                let subjectName = 'Unknown';
+                if (history.subjectId) {
+                  if (typeof history.subjectId === 'object') {
+                    subjectName = history.subjectId.name || 'Unknown';
+                  } else if (typeof history.subjectId === 'string') {
+                    const subject = subjects?.find(s => s._id === history.subjectId);
+                    subjectName = subject?.name || 'Unknown';
+                  }
+                }
+                
                 return (
                   <tr key={idx}>
-                    <td>{teacher?.name || 'Unknown'}</td>
-                    <td>{subject?.name || 'Unknown'}</td>
+                    <td>{teacherName}</td>
+                    <td>{subjectName}</td>
                     <td>{history.days?.map((d: string) => DAY_MAP[d]).join(', ') || '—'}</td>
                     <td>{new Date(history.assignedDate).toLocaleDateString()}</td>
                     <td>{history.endDate ? new Date(history.endDate).toLocaleDateString() : 'Current'}</td>
