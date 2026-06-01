@@ -4,9 +4,9 @@ import {
   Select, Button, Group, Title, Stack, Loader, Alert, Badge, 
   Table, ActionIcon, Tooltip, Modal, TextInput, Textarea,
   MultiSelect, Divider, Paper, Text, ThemeIcon, Card, SimpleGrid, Box,
-  Checkbox
+  Checkbox, Avatar
 } from '@mantine/core';
-import { IconHistory, IconRefresh, IconUser, IconBook, IconCalendar, IconPlus, IconTrash, IconEdit } from '@tabler/icons-react';
+import { IconHistory, IconRefresh, IconUser, IconBook, IconCalendar, IconPlus, IconTrash, IconEdit, IconSchool } from '@tabler/icons-react';
 import { api } from '../../../lib/api';
 import { notifications } from '@mantine/notifications';
 
@@ -133,6 +133,27 @@ export function RoutineTab() {
   // Check if a teacher covers all days
   const coversAllDays = (days: string[]) => days.length === 5 && days.includes('M') && days.includes('T') && days.includes('W') && days.includes('Th') && days.includes('F');
 
+  // Get class teacher info from currentClassTeacherId
+  const getClassTeacherInfo = () => {
+    if (section?.currentClassTeacherId) {
+      const teacherId = typeof section.currentClassTeacherId === 'object' 
+        ? section.currentClassTeacherId._id 
+        : section.currentClassTeacherId;
+      const subjectId = typeof section.currentClassTeacherSubjectId === 'object' 
+        ? section.currentClassTeacherSubjectId._id 
+        : section.currentClassTeacherSubjectId;
+      
+      const teacher = teachers?.find(t => t._id === teacherId);
+      const subject = subjects?.find(s => s._id === subjectId);
+      
+      return { 
+        teacher: teacher?.name || 'Not assigned', 
+        subject: subject?.name || 'Not assigned' 
+      };
+    }
+    return { teacher: 'Not assigned', subject: 'Not assigned' };
+  };
+
   // Assign/Update teacher mutation
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -203,10 +224,7 @@ export function RoutineTab() {
     return periodTeachers[period] || [];
   };
 
-  const classTeacher = {
-    teacher: teachers?.find(t => t._id === section?.currentClassTeacherId)?.name || 'Not assigned',
-    subject: subjects?.find(s => s._id === section?.currentClassTeacherSubjectId)?.name || 'Not assigned',
-  };
+  const classTeacherInfo = getClassTeacherInfo();
 
   const handleViewHistory = (period: number) => {
     setSelectedPeriod(period);
@@ -292,14 +310,16 @@ export function RoutineTab() {
       {selectedSectionId && section && (
         <>
           {/* Class Teacher Info */}
-          <Paper withBorder shadow="sm" radius="md" p="lg" bg="blue.0">
+          <Paper withBorder shadow="sm" radius="md" p="lg" style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #f0f9ff 100%)' }}>
             <Group justify="space-between">
               <Group>
-                <ThemeIcon size="lg" color="blue" variant="light" radius="xl"><IconUser size={20} /></ThemeIcon>
+                <Avatar size="lg" color="blue" radius="xl">
+                  <IconSchool size={24} />
+                </Avatar>
                 <div>
-                  <Text size="xs" c="dimmed">👩‍🏫 Class Teacher (Auto from Period 1)</Text>
-                  <Text fw={700} size="lg">{classTeacher.teacher}</Text>
-                  <Text size="sm" c="dimmed">{classTeacher.subject}</Text>
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>👩‍🏫 Class Teacher</Text>
+                  <Text fw={700} size="xl">{classTeacherInfo.teacher}</Text>
+                  <Text size="sm" c="dimmed">{classTeacherInfo.subject}</Text>
                 </div>
               </Group>
               <Badge size="lg" color="blue" variant="light">{periodCount} Periods per Day</Badge>
@@ -311,9 +331,9 @@ export function RoutineTab() {
             <Table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead>
                 <tr style={{ background: '#f8f9fa' }}>
-                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'left', width: '140px' }}>Period</th>
+                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'left', width: '100px' }}>Period</th>
                   <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'left' }}>Teachers & Subjects</th>
-                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'center', width: '140px' }}>Actions</th>
+                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'center', width: '120px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>

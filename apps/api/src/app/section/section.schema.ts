@@ -1,11 +1,11 @@
+// apps/api/src/app/section/section.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
 export type WeekDays = 'M' | 'T' | 'W' | 'Th' | 'F';
 
-// Define sub-schemas for better compatibility
 @Schema({ _id: false })
-class ClassTeacherHistoryEntry {
+export class ClassTeacherHistoryEntry {
   @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
   teacherId: Types.ObjectId;
 
@@ -23,7 +23,7 @@ class ClassTeacherHistoryEntry {
 }
 
 @Schema({ _id: false })
-class PeriodTeacherEntry {
+export class PeriodTeacherEntry {
   @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
   teacherId: Types.ObjectId;
 
@@ -66,7 +66,6 @@ export class Section extends Document {
   @Prop({ type: [ClassTeacherHistoryEntry], default: [] })
   classTeacherHistory: ClassTeacherHistoryEntry[];
 
-  // Use a plain object for period teachers instead of Map
   @Prop({ type: Object, default: {} })
   periodTeachers: Record<number, PeriodTeacherEntry[]>;
 

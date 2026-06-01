@@ -16,6 +16,8 @@ import { StudentActivityModule } from './student-activity/student-activity.modul
 import { UserModule } from './user/user.module';
 import { StaffModule } from './staff/staff.module';
 import { SchoolModule } from './school/school.module';
+import { TeacherRoutineModule } from './teacher-routine/teacher-routine.module';
+import { TeacherReportModule } from './teacher-report/teacher-report.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { SchoolModule } from './school/school.module';
     AcademicRecordModule,
     EnrollmentRecordModule,
     TeacherModule,
+    TeacherRoutineModule,
+    TeacherReportModule,
     AttendanceModule,
     StudentActivityModule,
     UserModule,

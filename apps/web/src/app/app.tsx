@@ -5,9 +5,23 @@ import { ClassRoutinePage } from '../pages/ClassRoutinePage';
 import { StudentsPage } from '../pages/students/StudentsPage';
 import { TeachersPage } from '../pages/TeachersPage';
 import { TeacherSchedulePage } from '../pages/routines/TeacherSchedulePage';
+
+// Portal Pages
+import { TeacherDashboard } from '../pages/portals/teacher/TeacherDashboard';
+import { StudentAttendance } from '../pages/portals/teacher/StudentAttendance';
+import { StudentActivityPage } from '../pages/portals/teacher/StudentActivityPage';
+import { StudentDashboard } from '../pages/portals/student/StudentDashboard';
+import { ParentDashboard } from '../pages/portals/parent/ParentDashboard';
+import { AdminDashboard } from '../pages/portals/admin/AdminDashboard';
+import { StaffDashboard } from '../pages/portals/staff/StaffDashboard';
+
+// Attendance Pages
+import { DailyAttendance } from '../pages/attendance/DailyAttendance';
+import { MonthlyAttendance } from '../pages/attendance/MonthlyAttendance';
+import { StudentAttendance as StudentAttendanceReport } from '../pages/attendance/StudentAttendance';
+
+// Other Pages
 import { StudentDetailPage } from '../pages/students/StudentDetailPage';
-import { DailyAttendance, MonthlyAttendance, StudentAttendance } from '../pages/attendance';
-import { StudentActivityPage } from '../pages/student-activity/StudentActivityPage';
 import { EnrollmentPage } from '../pages/enrollment/EnrollmentPage';
 import { UsersPage } from '../pages/users/UsersPage';
 import { StaffPage } from '../pages/staffs/StaffPage';
@@ -15,13 +29,6 @@ import { SchoolSignupPage } from '../pages/auth/SchoolSignupPage';
 import { SchoolLoginPage } from '../pages/auth/SchoolLoginPage';
 import { SchoolSuperAdminLoginPage } from '../pages/auth/SchoolSuperAdminLoginPage';
 import { SchoolNotFoundPage } from '../pages/auth/SchoolNotFoundPage';
-
-// Portal Pages
-import { StudentDashboard } from '../pages/portals/student/StudentDashboard';
-import { TeacherDashboard } from '../pages/portals/teacher/TeacherDashboard';
-import { ParentDashboard } from '../pages/portals/parent/ParentDashboard';
-import { AdminDashboard } from '../pages/portals/admin/AdminDashboard';
-import { StaffDashboard } from '../pages/portals/staff/StaffDashboard';
 
 // Protected route wrapper for school portals
 const SchoolProtectedRoute = ({ children, requiredRole }: { children: React.ReactNode; requiredRole?: string }) => {
@@ -59,6 +66,20 @@ function Dashboard() {
   const schoolSlug = localStorage.getItem('schoolSlug');
   const schoolName = localStorage.getItem('schoolName');
   
+  // Redirect based on user role
+  if (user.userType === 'teacher' || user.role === 'teacher') {
+    return <Navigate to={`/${schoolSlug}/teacher/dashboard`} replace />;
+  }
+  if (user.userType === 'student' || user.role === 'student') {
+    return <Navigate to={`/${schoolSlug}/student/dashboard`} replace />;
+  }
+  if (user.userType === 'parent' || user.role === 'parent') {
+    return <Navigate to={`/${schoolSlug}/parent/dashboard`} replace />;
+  }
+  if (user.userType === 'staff' || user.role === 'staff') {
+    return <Navigate to={`/${schoolSlug}/staff/dashboard`} replace />;
+  }
+  
   return (
     <div>
       <h2>Welcome to {schoolName || 'Hamro Shiksha Pranali'}</h2>
@@ -79,7 +100,7 @@ export default function App() {
         <Route path="/:slug/login" element={<SchoolLoginPage />} />
         <Route path="/:slug/super-admin/login" element={<SchoolSuperAdminLoginPage />} />
         
-        {/* School Admin Portal (with Layout) */}
+        {/* ==================== SCHOOL ADMIN PORTAL ==================== */}
         <Route path="/:slug/admin/dashboard" element={
           <SchoolAdminRoute>
             <Layout>
@@ -155,7 +176,7 @@ export default function App() {
         <Route path="/:slug/admin/attendance/student" element={
           <SchoolAdminRoute>
             <Layout>
-              <StudentAttendance />
+              <StudentAttendanceReport />
             </Layout>
           </SchoolAdminRoute>
         } />
@@ -192,7 +213,7 @@ export default function App() {
           </SchoolAdminRoute>
         } />
         
-        {/* Teacher Portal */}
+        {/* ==================== TEACHER PORTAL ==================== */}
         <Route path="/:slug/teacher/dashboard" element={
           <SchoolProtectedRoute requiredRole="teacher">
             <Layout>
@@ -201,7 +222,55 @@ export default function App() {
           </SchoolProtectedRoute>
         } />
         
-        {/* Student Portal */}
+        <Route path="/:slug/teacher/attendance" element={
+          <SchoolProtectedRoute requiredRole="teacher">
+            <Layout>
+              <StudentAttendance />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        <Route path="/:slug/teacher/attendance/:classId/:section" element={
+          <SchoolProtectedRoute requiredRole="teacher">
+            <Layout>
+              <StudentAttendance />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        <Route path="/:slug/teacher/activities" element={
+          <SchoolProtectedRoute requiredRole="teacher">
+            <Layout>
+              <StudentActivityPage />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        <Route path="/:slug/teacher/activities/:period" element={
+          <SchoolProtectedRoute requiredRole="teacher">
+            <Layout>
+              <StudentActivityPage />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        <Route path="/:slug/teacher/schedule" element={
+          <SchoolProtectedRoute requiredRole="teacher">
+            <Layout>
+              <TeacherSchedulePage />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        <Route path="/:slug/teacher/students" element={
+          <SchoolProtectedRoute requiredRole="teacher">
+            <Layout>
+              <StudentsPage />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        {/* ==================== STUDENT PORTAL ==================== */}
         <Route path="/:slug/student/dashboard" element={
           <SchoolProtectedRoute requiredRole="student">
             <Layout>
@@ -210,7 +279,23 @@ export default function App() {
           </SchoolProtectedRoute>
         } />
         
-        {/* Parent Portal */}
+        <Route path="/:slug/student/attendance" element={
+          <SchoolProtectedRoute requiredRole="student">
+            <Layout>
+              <StudentAttendanceReport />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        <Route path="/:slug/student/routine" element={
+          <SchoolProtectedRoute requiredRole="student">
+            <Layout>
+              <ClassRoutinePage />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        {/* ==================== PARENT PORTAL ==================== */}
         <Route path="/:slug/parent/dashboard" element={
           <SchoolProtectedRoute requiredRole="parent">
             <Layout>
@@ -219,7 +304,23 @@ export default function App() {
           </SchoolProtectedRoute>
         } />
         
-        {/* Staff Portal */}
+        <Route path="/:slug/parent/children" element={
+          <SchoolProtectedRoute requiredRole="parent">
+            <Layout>
+              <StudentsPage />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        <Route path="/:slug/parent/attendance" element={
+          <SchoolProtectedRoute requiredRole="parent">
+            <Layout>
+              <StudentAttendanceReport />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        {/* ==================== STAFF PORTAL ==================== */}
         <Route path="/:slug/staff/dashboard" element={
           <SchoolProtectedRoute requiredRole="staff">
             <Layout>
@@ -228,7 +329,7 @@ export default function App() {
           </SchoolProtectedRoute>
         } />
         
-        {/* Super Admin Routes (no school slug) */}
+        {/* ==================== SUPER ADMIN ROUTES (no school slug) ==================== */}
         <Route path="/super-admin/dashboard" element={
           <SchoolProtectedRoute requiredRole="super_admin">
             <Layout>
@@ -237,9 +338,33 @@ export default function App() {
           </SchoolProtectedRoute>
         } />
         
-        {/* Legacy redirects (for backward compatibility) */}
+        <Route path="/super-admin/schools" element={
+          <SchoolProtectedRoute requiredRole="super_admin">
+            <Layout>
+              <div>Schools Management Page</div>
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        <Route path="/super-admin/users" element={
+          <SchoolProtectedRoute requiredRole="super_admin">
+            <Layout>
+              <UsersPage />
+            </Layout>
+          </SchoolProtectedRoute>
+        } />
+        
+        {/* ==================== ROOT AND LEGACY REDIRECTS ==================== */}
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/" element={<Navigate to="/signup" replace />} />
+        
+        {/* 404 Fallback */}
+        <Route path="*" element={
+          <div style={{ textAlign: 'center', padding: '50px' }}>
+            <h2>404 - Page Not Found</h2>
+            <p>The page you are looking for does not exist.</p>
+          </div>
+        } />
       </Routes>
     </BrowserRouter>
   );

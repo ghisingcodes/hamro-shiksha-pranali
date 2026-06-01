@@ -1,415 +1,610 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Select, Button, Group, Title, Stack, Loader, Alert, Card, 
-  Text, ActionIcon, Modal, TextInput, SimpleGrid, ThemeIcon, 
-  Badge, Tooltip, Divider, Avatar, Center
+  Select, Button, Group, Title, Stack, Loader, Alert, Badge, 
+  Table, ActionIcon, Tooltip, Modal, TextInput, Textarea,
+  MultiSelect, Divider, Paper, Text, ThemeIcon, Card, SimpleGrid, Box,
+  Checkbox, Avatar
 } from '@mantine/core';
-import { IconPlus, IconTrash, IconEdit, IconLayoutGrid, IconUser, IconBook, IconRefresh, IconSchool } from '@tabler/icons-react';
+import { IconHistory, IconRefresh, IconUser, IconBook, IconCalendar, IconPlus, IconTrash, IconEdit, IconSchool } from '@tabler/icons-react';
 import { api } from '../../../lib/api';
 import { notifications } from '@mantine/notifications';
-import { AcademicSeason, Class } from '../../../lib/types';
 
-interface SectionsTabProps {
-  selectedSeasonId: string;
-  onSeasonChange: (seasonId: string) => void;
-}
+const DAY_OPTIONS = [
+  { value: 'M', label: 'Monday' },
+  { value: 'T', label: 'Tuesday' },
+  { value: 'W', label: 'Wednesday' },
+  { value: 'Th', label: 'Thursday' },
+  { value: 'F', label: 'Friday' },
+];
 
-export function SectionsTab({ selectedSeasonId, onSeasonChange }: SectionsTabProps) {
+const DAY_PRESETS = [
+  { label: 'All Week', value: ['M', 'T', 'W', 'Th', 'F'], icon: '📅' },
+  { label: 'Mon, Wed, Fri', value: ['M', 'W', 'F'], icon: '📆' },
+  { label: 'Tue, Thu', value: ['T', 'Th'], icon: '📖' },
+  { label: 'Mon, Tue, Wed', value: ['M', 'T', 'W'], icon: '📘' },
+  { label: 'Wed, Thu, Fri', value: ['W', 'Th', 'F'], icon: '📙' },
+  { label: 'Mon, Tue', value: ['M', 'T'], icon: '📗' },
+  { label: 'Thu, Fri', value: ['Th', 'F'], icon: '📕' },
+  { label: 'Only Monday', value: ['M'], icon: '🔵' },
+  { label: 'Only Friday', value: ['F'], icon: '🔴' },
+];
+
+const DAY_MAP: Record<string, string> = {
+  M: 'Mon', T: 'Tue', W: 'Wed', Th: 'Thu', F: 'Fri'
+};
+
+export function RoutineTab() {
   const queryClient = useQueryClient();
+  const [selectedSeasonId, setSelectedSeasonId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState('');
-  const [addingSection, setAddingSection] = useState(false);
-  const [newSectionName, setNewSectionName] = useState('');
-  const [editingSection, setEditingSection] = useState<{ id: string; name: string } | null>(null);
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [selectedSectionId, setSelectedSectionId] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState<number | null>(null);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [endModalOpen, setEndModalOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<any>(null);
+  const [endingAssignment, setEndingAssignment] = useState<{ period: number; teacherId: string; teacherName: string } | null>(null);
+  const [endReason, setEndReason] = useState('');
+  const [assignForm, setAssignForm] = useState({ 
+    teacherId: '', 
+    subjectId: '', 
+    days: [] as string[], 
+    allDays: false 
+  });
+  const [periodHistory, setPeriodHistory] = useState<any[]>([]);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const schoolId = user.schoolId;
 
   // Fetch seasons
-  const { data: seasons, isLoading: seasonsLoading } = useQuery<AcademicSeason[]>({
+  const { data: seasons } = useQuery({
     queryKey: ['seasons', schoolId],
-    queryFn: () => api.get('/academic-seasons').then(res => res.data),
+    queryFn: () => api.get('/academic-seasons', { headers: { 'X-School-Id': schoolId } }).then(res => res.data),
     enabled: !!schoolId,
   });
 
   // Fetch classes
-  const { data: classes, isLoading: classesLoading } = useQuery<Class[]>({
+  const { data: classes } = useQuery({
     queryKey: ['classes', schoolId],
-    queryFn: () => api.get('/classes').then(res => res.data),
+    queryFn: () => api.get('/classes', { headers: { 'X-School-Id': schoolId } }).then(res => res.data),
     enabled: !!schoolId,
   });
 
-  // Fetch sections - with populated class teacher
-  const { data: sections, refetch, isLoading: sectionsLoading, error } = useQuery({
-    queryKey: ['sections', selectedSeasonId, selectedClassId, schoolId],
-    queryFn: async () => {
-      if (!selectedSeasonId || !selectedClassId) return [];
-      console.log('Fetching sections with params:', { seasonId: selectedSeasonId, classId: selectedClassId });
-      const res = await api.get(`/sections`, { 
-        params: { seasonId: selectedSeasonId, classId: selectedClassId },
-        headers: { 'X-School-Id': schoolId } 
-      });
-      console.log('Sections API response:', JSON.stringify(res.data, null, 2));
-      return res.data || [];
-    },
-    enabled: !!selectedSeasonId && !!selectedClassId && !!schoolId,
-  });
-
-  // Fetch teachers (still needed for period teachers)
-  const { data: teachers, isLoading: teachersLoading } = useQuery({
+  // Fetch teachers
+  const { data: teachers } = useQuery({
     queryKey: ['teachers', schoolId],
     queryFn: () => api.get('/teachers', { headers: { 'X-School-Id': schoolId } }).then(res => res.data),
     enabled: !!schoolId,
   });
 
-  // Fetch subjects (still needed for period teachers)
-  const { data: subjects, isLoading: subjectsLoading } = useQuery({
+  // Fetch subjects
+  const { data: subjects } = useQuery({
     queryKey: ['subjects', selectedSeasonId, selectedClassId, schoolId],
-    queryFn: () => api.get(`/subjects?seasonId=${selectedSeasonId}&classId=${selectedClassId}`, { 
-      headers: { 'X-School-Id': schoolId } 
-    }).then(res => res.data),
+    queryFn: async () => {
+      if (!selectedSeasonId || !selectedClassId) return [];
+      const response = await api.get(`/subjects`, { 
+        params: { seasonId: selectedSeasonId, classId: selectedClassId },
+        headers: { 'X-School-Id': schoolId } 
+      });
+      return response.data;
+    },
     enabled: !!selectedSeasonId && !!selectedClassId && !!schoolId,
   });
 
-  const createSectionMutation = useMutation({
-    mutationFn: async (name: string) => {
-      return api.post('/sections', {
-        classId: selectedClassId,
-        seasonId: selectedSeasonId,
-        name: name,
-      }, { headers: { 'X-School-Id': schoolId } });
+  // Fetch sections
+  const { data: sections, refetch: refetchSections } = useQuery({
+    queryKey: ['sections', selectedSeasonId, selectedClassId, schoolId],
+    queryFn: async () => {
+      if (!selectedSeasonId || !selectedClassId) return [];
+      const response = await api.get(`/sections`, { 
+        params: { seasonId: selectedSeasonId, classId: selectedClassId },
+        headers: { 'X-School-Id': schoolId } 
+      });
+      return response.data;
     },
-    onSuccess: () => {
-      refetch();
-      setAddingSection(false);
-      setNewSectionName('');
-      notifications.show({ title: 'Success', message: 'Section added', color: 'green' });
-    },
-    onError: (err: any) => {
-      console.error('Create section error:', err.response?.data);
-      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to add section', color: 'red' });
-    },
+    enabled: !!selectedSeasonId && !!selectedClassId && !!schoolId,
   });
 
-  const deleteSectionMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/sections/${id}`, { headers: { 'X-School-Id': schoolId } }),
-    onSuccess: () => {
-      refetch();
-      notifications.show({ title: 'Success', message: 'Section deleted', color: 'green' });
+  // Fetch single section data
+  const { data: section, refetch: refetchSection } = useQuery({
+    queryKey: ['section', selectedSectionId, schoolId],
+    queryFn: async () => {
+      if (!selectedSectionId) return null;
+      const response = await api.get(`/sections/${selectedSectionId}`, { 
+        headers: { 'X-School-Id': schoolId } 
+      });
+      return response.data;
     },
-  });
-
-  const updateSectionMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => api.put(`/sections/${id}`, { name }),
-    onSuccess: () => {
-      refetch();
-      setEditingSection(null);
-      notifications.show({ title: 'Success', message: 'Section renamed', color: 'green' });
-    },
+    enabled: !!selectedSectionId && !!schoolId,
   });
 
   const selectedClass = classes?.find(c => c._id === selectedClassId);
-  const sectionsList = sections || [];
+  const periodCount = selectedClass?.periodCount || 7;
 
-  // Get class teacher - now the teacher and subject are already populated in the section object
-  const getClassTeacher = (section: any) => {
-    // The teacher and subject are already populated by the backend
-    if (section.currentClassTeacherId && typeof section.currentClassTeacherId === 'object') {
-      return { 
-        teacher: section.currentClassTeacherId, 
-        subject: section.currentClassTeacherSubjectId 
-      };
-    }
-    return { teacher: null, subject: null };
+  // Get all assignments for a period
+  const getAssignments = (period: number) => {
+    const periodTeachers = section?.periodTeachers;
+    if (!periodTeachers) return [];
+    const assignments = periodTeachers[period] || [];
+    return assignments.filter((a: any) => !a.endDate);
   };
 
-  if (seasonsLoading || classesLoading || teachersLoading || subjectsLoading) return <Loader />;
+  // Check if a teacher covers all days
+  const coversAllDays = (days: string[]) => days.length === 5 && days.includes('M') && days.includes('T') && days.includes('W') && days.includes('Th') && days.includes('F');
+
+  // Get class teacher info - FIXED: Extract string values from objects
+  const getClassTeacherInfo = () => {
+    // Handle currentClassTeacherId which might be a string or an object
+    let teacherName = 'Not assigned';
+    let subjectName = 'Not assigned';
+    
+    if (section?.currentClassTeacherId) {
+      // If it's an object with name property
+      if (typeof section.currentClassTeacherId === 'object' && section.currentClassTeacherId !== null) {
+        teacherName = (section.currentClassTeacherId as any).name || 'Not assigned';
+      } 
+      // If it's a string, find the teacher from the teachers array
+      else if (typeof section.currentClassTeacherId === 'string') {
+        const teacher = teachers?.find(t => t._id === section.currentClassTeacherId);
+        teacherName = teacher?.name || 'Not assigned';
+      }
+    }
+    
+    if (section?.currentClassTeacherSubjectId) {
+      // If it's an object with name property
+      if (typeof section.currentClassTeacherSubjectId === 'object' && section.currentClassTeacherSubjectId !== null) {
+        subjectName = (section.currentClassTeacherSubjectId as any).name || 'Not assigned';
+      }
+      // If it's a string, find the subject from the subjects array
+      else if (typeof section.currentClassTeacherSubjectId === 'string') {
+        const subject = subjects?.find(s => s._id === section.currentClassTeacherSubjectId);
+        subjectName = subject?.name || 'Not assigned';
+      }
+    }
+    
+    return { teacher: teacherName, subject: subjectName };
+  };
+
+  // Assign/Update teacher mutation
+  const assignMutation = useMutation({
+    mutationFn: async () => {
+      let daysToSend = assignForm.allDays ? ['M', 'T', 'W', 'Th', 'F'] : assignForm.days;
+      if (daysToSend.length === 0) daysToSend = assignForm.days;
+      
+      const payload = {
+        period: selectedPeriod,
+        teacherId: assignForm.teacherId,
+        subjectId: assignForm.subjectId,
+        days: daysToSend,
+        assignedDate: new Date().toISOString(),
+      };
+      const response = await api.post(
+        `/sections/${selectedSectionId}/assign-period-teacher`, 
+        payload,
+        { headers: { 'X-School-Id': schoolId } }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchSection();
+      refetchSections();
+      setAssignModalOpen(false);
+      setEditingAssignment(null);
+      setAssignForm({ teacherId: '', subjectId: '', days: [], allDays: false });
+      notifications.show({ title: 'Success', message: 'Teacher assigned successfully', color: 'green' });
+    },
+    onError: (err: any) => {
+      notifications.show({ 
+        title: 'Error', 
+        message: err.response?.data?.message || 'Failed to assign teacher', 
+        color: 'red' 
+      });
+    },
+  });
+
+  // End assignment mutation with reason
+  const endMutation = useMutation({
+    mutationFn: async () => {
+      if (!endingAssignment) return;
+      const payload = { 
+        period: endingAssignment.period, 
+        teacherId: endingAssignment.teacherId, 
+        endDate: new Date().toISOString(), 
+        reason: endReason || 'Assignment ended by admin'
+      };
+      return api.post(`/sections/${selectedSectionId}/end-period-teacher`, payload, { 
+        headers: { 'X-School-Id': schoolId } 
+      });
+    },
+    onSuccess: () => {
+      refetchSection();
+      refetchSections();
+      setEndModalOpen(false);
+      setEndingAssignment(null);
+      setEndReason('');
+      notifications.show({ title: 'Success', message: 'Assignment ended', color: 'green' });
+    },
+    onError: (err: any) => {
+      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to end assignment', color: 'red' });
+    },
+  });
+
+  const getPeriodHistory = (period: number) => {
+    const periodTeachers = section?.periodTeachers;
+    if (!periodTeachers) return [];
+    return periodTeachers[period] || [];
+  };
+
+  const classTeacherInfo = getClassTeacherInfo();
+
+  const handleViewHistory = (period: number) => {
+    setSelectedPeriod(period);
+    setPeriodHistory(getPeriodHistory(period));
+    setHistoryModalOpen(true);
+  };
+
+  const handleEditAssignment = (period: number, assignment: any) => {
+    setEditingAssignment(assignment);
+    setSelectedPeriod(period);
+    setAssignForm({
+      teacherId: assignment.teacherId,
+      subjectId: assignment.subjectId,
+      days: assignment.days,
+      allDays: coversAllDays(assignment.days),
+    });
+    setAssignModalOpen(true);
+  };
+
+  const handleEndAssignment = (period: number, teacherId: string, teacherName: string) => {
+    setEndingAssignment({ period, teacherId, teacherName });
+    setEndReason('');
+    setEndModalOpen(true);
+  };
+
+  const handleClassChange = (val: string | null) => {
+    setSelectedClassId(val || '');
+    setSelectedSectionId('');
+  };
+
+  const handleSeasonChange = (val: string | null) => {
+    setSelectedSeasonId(val || '');
+    setSelectedClassId('');
+    setSelectedSectionId('');
+  };
+
+  const handleSectionChange = (val: string | null) => {
+    setSelectedSectionId(val || '');
+  };
+
+  const handleRefresh = () => {
+    if (selectedSectionId) refetchSection();
+    if (selectedClassId && selectedSeasonId) refetchSections();
+  };
 
   return (
     <Stack gap="xl">
-      {/* Filters */}
-      <Card withBorder shadow="sm" radius="md" p="lg">
+      {/* Filters Section */}
+      <Paper withBorder shadow="sm" radius="md" p="lg">
         <Group grow align="flex-end">
           <Select
             label="Academic Season"
             placeholder="Select season"
             data={seasons?.map(s => ({ value: s._id, label: s.name })) || []}
             value={selectedSeasonId}
-            onChange={(val) => { 
-              onSeasonChange(val || ''); 
-              setSelectedClassId(''); 
-            }}
-            leftSection={<IconSchool size={16} />}
+            onChange={handleSeasonChange}
+            leftSection={<IconCalendar size={16} />}
           />
           <Select
             label="Class"
             placeholder="Select class"
             data={classes?.map(c => ({ value: c._id, label: c.displayName })) || []}
             value={selectedClassId}
-            onChange={setSelectedClassId}
+            onChange={handleClassChange}
             disabled={!selectedSeasonId}
             leftSection={<IconBook size={16} />}
           />
-          <Button
-            leftSection={<IconPlus size={14} />}
-            onClick={() => setAddingSection(true)}
-            disabled={!selectedClassId || !selectedSeasonId}
-            variant="gradient"
-            gradient={{ from: 'blue', to: 'cyan' }}
-          >
-            Add Section
+          <Select
+            label="Section"
+            placeholder="Select section"
+            data={sections?.map(s => ({ value: s._id, label: s.name })) || []}
+            value={selectedSectionId}
+            onChange={handleSectionChange}
+            disabled={!selectedClassId}
+            leftSection={<IconUser size={16} />}
+          />
+          <Button variant="light" onClick={handleRefresh} disabled={!selectedSectionId} leftSection={<IconRefresh size={16} />}>
+            Refresh
           </Button>
         </Group>
-      </Card>
+      </Paper>
 
-      {/* Refresh Button */}
-      <Group justify="flex-end">
-        <Tooltip label="Refresh Sections">
-          <ActionIcon onClick={() => refetch()} variant="light" size="lg" disabled={!selectedClassId}>
-            <IconRefresh size={18} />
-          </ActionIcon>
-        </Tooltip>
-      </Group>
-
-      {/* No Selection States */}
-      {!selectedSeasonId && (
-        <Center py={50}>
-          <Stack align="center">
-            <ThemeIcon size={60} radius="xl" color="gray" variant="light">
-              <IconSchool size={30} />
-            </ThemeIcon>
-            <Text size="lg" c="dimmed">Please select an academic season first</Text>
-          </Stack>
-        </Center>
-      )}
-
-      {selectedSeasonId && !selectedClassId && (
-        <Center py={50}>
-          <Stack align="center">
-            <ThemeIcon size={60} radius="xl" color="gray" variant="light">
-              <IconBook size={30} />
-            </ThemeIcon>
-            <Text size="lg" c="dimmed">Please select a class to manage sections</Text>
-          </Stack>
-        </Center>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <Alert color="red" variant="light" title="Error Loading Sections">
-          {error.message}
-        </Alert>
-      )}
-
-      {/* Loading State */}
-      {sectionsLoading && selectedClassId && <Center><Loader /></Center>}
-
-      {/* Sections Display */}
-      {selectedClassId && selectedSeasonId && !sectionsLoading && sectionsList.length === 0 && (
-        <Alert color="yellow" variant="light">
-          No sections added yet. Click "Add Section" to create one.
-        </Alert>
-      )}
-
-      {selectedClassId && selectedSeasonId && !sectionsLoading && sectionsList.length > 0 && (
+      {selectedSectionId && section && (
         <>
-          <Group justify="space-between" mb="md">
-            <div>
-              <Group gap="xs">
-                <ThemeIcon size="lg" color="blue" variant="light" radius="xl">
-                  <IconSchool size={18} />
-                </ThemeIcon>
-                <Title order={3}>{selectedClass?.displayName}</Title>
+          {/* Class Teacher Info */}
+          <Paper withBorder shadow="sm" radius="md" p="lg" style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #f0f9ff 100%)' }}>
+            <Group justify="space-between">
+              <Group>
+                <Avatar size="lg" color="blue" radius="xl">
+                  <IconSchool size={24} />
+                </Avatar>
+                <div>
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>👩‍🏫 Class Teacher</Text>
+                  <Text fw={700} size="xl">{classTeacherInfo.teacher}</Text>
+                  <Text size="sm" c="dimmed">{classTeacherInfo.subject}</Text>
+                </div>
               </Group>
-              <Text size="sm" c="dimmed" ml={40}>Periods: {selectedClass?.periodCount}</Text>
-            </div>
-            <Badge size="lg" variant="gradient" gradient={{ from: 'blue', to: 'cyan' }}>
-              {sectionsList.length} Section{sectionsList.length !== 1 ? 's' : ''}
-            </Badge>
-          </Group>
+              <Badge size="lg" color="blue" variant="light">{periodCount} Periods per Day</Badge>
+            </Group>
+          </Paper>
 
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
-            {sectionsList.map((section: any, idx: number) => {
-              const classTeacher = getClassTeacher(section);
-              const isExpanded = expandedSection === section._id;
-              const periodCount = Object.keys(section.periodTeachers || {}).length;
-              
-              return (
-                <motion.div
-                  key={section._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.05, duration: 0.3 }}
-                  whileHover={{ scale: 1.02 }}
-                >
-                  <Card 
-                    withBorder 
-                    shadow="sm" 
-                    radius="lg" 
-                    padding="lg"
-                    style={{ 
-                      cursor: 'pointer',
-                      background: isExpanded ? 'linear-gradient(135deg, #f0f4ff 0%, #ffffff 100%)' : 'white',
-                      border: isExpanded ? '2px solid #667eea' : undefined,
-                    }}
-                    onClick={() => setExpandedSection(isExpanded ? null : section._id)}
-                  >
-                    <Group justify="space-between" align="center">
-                      <Group>
-                        <ThemeIcon size="xl" color="cyan" variant="light" radius="xl">
-                          <IconLayoutGrid size={24} />
-                        </ThemeIcon>
+          {/* Period-wise Multi-Teacher Table */}
+          <Box style={{ overflowX: 'auto' }}>
+            <Table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa' }}>
+                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'left', width: '100px' }}>Period</th>
+                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'left' }}>Teachers & Subjects</th>
+                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'center', width: '120px' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: periodCount }).map((_, periodIdx) => {
+                  const period = periodIdx + 1;
+                  const assignments = getAssignments(period);
+                  
+                  return (
+                    <tr key={period} style={{ borderBottom: '1px solid #e9ecef' }}>
+                      <td style={{ padding: '12px 16px', fontWeight: 600, background: '#f8f9fa', verticalAlign: 'top' }}>
                         <div>
-                          <Text size="xl" fw={700}>Section {section.name}</Text>
-                          <Text size="xs" c="dimmed">ID: {section._id.slice(-8)}</Text>
+                          Period {period}
+                          {period === 1 && (
+                            <Badge size="sm" color="green" fullWidth mt={4} style={{ display: 'block', textAlign: 'center' }}>
+                              Class Teacher
+                            </Badge>
+                          )}
                         </div>
-                      </Group>
-                      <Group gap="xs">
-                        <Tooltip label="Edit Section Name">
-                          <ActionIcon 
-                            variant="subtle" 
-                            color="blue" 
-                            onClick={(e) => { e.stopPropagation(); setEditingSection({ id: section._id, name: section.name }); }}
-                          >
-                            <IconEdit size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="Delete Section">
-                          <ActionIcon 
-                            variant="subtle" 
-                            color="red" 
-                            onClick={(e) => { e.stopPropagation(); deleteSectionMutation.mutate(section._id); }}
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
-                    </Group>
-
-                    <Divider my="md" />
-
-                    {/* Class Teacher Info - Using populated data from backend */}
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <Group mb="xs" align="center">
-                        <IconUser size={14} color="gray" />
-                        <Text size="sm" fw={500}>Class Teacher</Text>
-                      </Group>
-                      
-                      {classTeacher.teacher ? (
-                        <Card withBorder radius="md" p="xs" style={{ background: '#e8f0fe' }}>
-                          <Group>
-                            <Avatar size="md" color="blue" radius="xl">
-                              {classTeacher.teacher.name?.charAt(0) || '?'}
-                            </Avatar>
-                            <div>
-                              <Text size="sm" fw={600}>{classTeacher.teacher.name || 'Unknown Teacher'}</Text>
-                              <Text size="xs" c="dimmed">
-                                {classTeacher.subject?.name || (classTeacher.subject && typeof classTeacher.subject === 'object' ? classTeacher.subject.name : 'No subject assigned')}
-                              </Text>
-                            </div>
-                          </Group>
-                        </Card>
-                      ) : (
-                        <Alert color="yellow" variant="light" p="xs" radius="md">
-                          <Text size="xs">⚠️ No class teacher assigned for this section.</Text>
-                        </Alert>
-                      )}
-                    </div>
-
-                    <Divider my="md" />
-
-                    {/* Period Teachers Overview */}
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <Group justify="space-between" mb="xs">
-                        <Group gap="xs">
-                          <IconBook size={14} color="gray" />
-                          <Text size="sm" fw={500}>Period Teachers</Text>
-                        </Group>
-                        <Badge size="sm" color={periodCount > 0 ? "blue" : "gray"} variant="light">
-                          {periodCount} period{periodCount !== 1 ? 's' : ''}
-                        </Badge>
-                      </Group>
-
-                      {periodCount === 0 && (
-                        <Text size="xs" c="dimmed" ta="center" py="sm">No period teachers assigned</Text>
-                      )}
-
-                      {isExpanded && periodCount > 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          <Stack gap="xs" mt="xs">
-                            {Object.entries(section.periodTeachers || {}).map(([period, assignments]: [string, any]) => {
-                              const active = assignments?.find((a: any) => !a.endDate);
-                              const teacher = teachers?.find((t: any) => t._id === active?.teacherId);
-                              const subject = subjects?.find((s: any) => s._id === active?.subjectId);
+                      </td>
+                      <td style={{ padding: '12px 16px', verticalAlign: 'top' }}>
+                        {assignments.length === 0 ? (
+                          <Text size="sm" c="dimmed" fs="italic">— No teachers assigned —</Text>
+                        ) : (
+                          <Stack gap="xs">
+                            {assignments.map((assignment: any, idx: number) => {
+                              // Safely extract teacher name
+                              let teacherName = 'Unknown';
+                              if (assignment.teacherId) {
+                                if (typeof assignment.teacherId === 'object') {
+                                  teacherName = assignment.teacherId.name || 'Unknown';
+                                } else if (typeof assignment.teacherId === 'string') {
+                                  const teacher = teachers?.find(t => t._id === assignment.teacherId);
+                                  teacherName = teacher?.name || 'Unknown';
+                                }
+                              }
+                              
+                              // Safely extract subject name
+                              let subjectName = 'Unknown';
+                              if (assignment.subjectId) {
+                                if (typeof assignment.subjectId === 'object') {
+                                  subjectName = assignment.subjectId.name || 'Unknown';
+                                } else if (typeof assignment.subjectId === 'string') {
+                                  const subject = subjects?.find(s => s._id === assignment.subjectId);
+                                  subjectName = subject?.name || 'Unknown';
+                                }
+                              }
+                              
+                              const daysStr = assignment.days.map((d: string) => DAY_MAP[d]).join(', ');
+                              const isFullWeek = coversAllDays(assignment.days);
+                              
                               return (
-                                <Card key={period} withBorder radius="md" p="xs" style={{ background: '#fafafa' }}>
+                                <Card key={idx} withBorder p="xs" radius="md" style={{ background: '#fafafa' }}>
                                   <Group justify="space-between" wrap="nowrap">
-                                    <Badge color="teal" size="sm" variant="filled">Period {period}</Badge>
-                                    <Text size="xs" c="dimmed" style={{ flex: 1 }}>{subject?.name || '—'}</Text>
-                                    <Text size="xs" fw={500}>{teacher?.name || '—'}</Text>
+                                    <div style={{ flex: 1 }}>
+                                      <Group gap="xs" wrap="wrap">
+                                        <Badge color="blue" variant="light">{subjectName}</Badge>
+                                        <Text size="sm" fw={500}>{teacherName}</Text>
+                                        {isFullWeek ? (
+                                          <Badge size="xs" color="green">📅 All Days</Badge>
+                                        ) : (
+                                          <Badge size="xs" color="gray" variant="outline">📅 {daysStr}</Badge>
+                                        )}
+                                      </Group>
+                                    </div>
+                                    <Group gap={4}>
+                                      <Tooltip label="Edit Assignment">
+                                        <ActionIcon size="sm" color="blue" variant="subtle" onClick={() => handleEditAssignment(period, assignment)}>
+                                          <IconEdit size={14} />
+                                        </ActionIcon>
+                                      </Tooltip>
+                                      <Tooltip label="End Assignment">
+                                        <ActionIcon size="sm" color="red" variant="subtle" onClick={() => handleEndAssignment(period, assignment.teacherId, teacherName)}>
+                                          <IconTrash size={14} />
+                                        </ActionIcon>
+                                      </Tooltip>
+                                    </Group>
                                   </Group>
-                                  {active?.days && active.days.length > 0 && (
-                                    <Text size="xs" c="dimmed" mt={4}>
-                                      Days: {active.days.map((d: string) => {
-                                        const dayMap: Record<string, string> = { M: 'Mon', T: 'Tue', W: 'Wed', Th: 'Thu', F: 'Fri' };
-                                        return dayMap[d];
-                                      }).join(', ')}
-                                    </Text>
-                                  )}
                                 </Card>
                               );
                             })}
                           </Stack>
-                        </motion.div>
-                      )}
-                      
-                      {!isExpanded && periodCount > 0 && (
-                        <Text size="xs" c="dimmed" ta="center" mt="xs">
-                          👆 Click to expand
-                        </Text>
-                      )}
-                    </div>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </SimpleGrid>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 16px', textAlign: 'center', verticalAlign: 'top' }}>
+                        <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => {
+                          setSelectedPeriod(period);
+                          setEditingAssignment(null);
+                          setAssignForm({ teacherId: '', subjectId: '', days: [], allDays: false });
+                          setAssignModalOpen(true);
+                        }}>
+                          Add Teacher
+                        </Button>
+                        {assignments.length > 0 && (
+                          <Tooltip label="History">
+                            <ActionIcon size="sm" ml="xs" onClick={() => handleViewHistory(period)}><IconHistory size={16} /></ActionIcon>
+                          </Tooltip>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </Box>
         </>
       )}
 
-      {/* Add Section Modal */}
-      <Modal opened={addingSection} onClose={() => setAddingSection(false)} title="Add New Section" size="md">
-        <TextInput 
-          label="Section Name" 
-          placeholder="e.g., A, B, Buddha, Araniko" 
-          value={newSectionName} 
-          onChange={e => setNewSectionName(e.target.value)} 
-          required 
-          autoFocus
+      {/* No Selection States */}
+      {selectedClassId && selectedSeasonId && !selectedSectionId && <Alert color="blue" variant="light">Please select a section to view and manage routine.</Alert>}
+      {!selectedClassId && selectedSeasonId && <Alert color="blue" variant="light">Please select a class to continue.</Alert>}
+      {!selectedSeasonId && <Alert color="blue" variant="light">Please select an academic season first.</Alert>}
+
+      {/* Assign/Edit Teacher Modal */}
+      <Modal opened={assignModalOpen} onClose={() => setAssignModalOpen(false)} title={`${editingAssignment ? 'Edit' : 'Add'} Teacher - Period ${selectedPeriod}`} size="lg">
+        <Select
+          label="Teacher"
+          placeholder="Select teacher"
+          data={teachers?.map(t => ({ value: t._id, label: t.name })) || []}
+          value={assignForm.teacherId}
+          onChange={(val) => setAssignForm({ ...assignForm, teacherId: val || '' })}
+          searchable
+          required
         />
+        <Select
+          label="Subject"
+          placeholder="Select subject"
+          data={subjects?.map(s => ({ value: s._id, label: s.name })) || []}
+          value={assignForm.subjectId}
+          onChange={(val) => setAssignForm({ ...assignForm, subjectId: val || '' })}
+          searchable
+          required
+          mt="md"
+        />
+        
+        <Divider label="Select Days" my="md" />
+        
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs" mb="md">
+          {DAY_PRESETS.map(preset => (
+            <Button
+              key={preset.label}
+              size="xs"
+              variant={assignForm.days.length === preset.value.length && assignForm.days.every(d => preset.value.includes(d)) ? "filled" : "outline"}
+              onClick={() => setAssignForm({ 
+                ...assignForm, 
+                days: preset.value, 
+                allDays: preset.value.length === 5 
+              })}
+            >
+              {preset.icon} {preset.label}
+            </Button>
+          ))}
+        </SimpleGrid>
+
+        <Checkbox
+          label="All Days (Monday to Friday)"
+          checked={assignForm.allDays}
+          onChange={(e) => setAssignForm({ 
+            ...assignForm, 
+            allDays: e.currentTarget.checked, 
+            days: e.currentTarget.checked ? ['M', 'T', 'W', 'Th', 'F'] : [] 
+          })}
+          mt="md"
+        />
+        
+        {!assignForm.allDays && (
+          <MultiSelect
+            label="Or Select Specific Days"
+            placeholder="Select days"
+            data={DAY_OPTIONS}
+            value={assignForm.days}
+            onChange={(val) => setAssignForm({ ...assignForm, days: val })}
+            mt="md"
+            required
+          />
+        )}
+        
         <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={() => setAddingSection(false)}>Cancel</Button>
-          <Button onClick={() => createSectionMutation.mutate(newSectionName)}>Create Section</Button>
+          <Button variant="default" onClick={() => setAssignModalOpen(false)}>Cancel</Button>
+          <Button onClick={() => assignMutation.mutate()} disabled={!assignForm.teacherId || (!assignForm.allDays && assignForm.days.length === 0)}>
+            {editingAssignment ? 'Update Assignment' : 'Assign Teacher'}
+          </Button>
         </Group>
       </Modal>
 
-      {/* Edit Section Modal */}
-      <Modal opened={!!editingSection} onClose={() => setEditingSection(null)} title="Edit Section Name" size="md">
-        <TextInput 
-          label="Section Name" 
-          value={editingSection?.name || ''} 
-          onChange={e => setEditingSection({ ...editingSection!, name: e.target.value })} 
-          required 
+      {/* End Assignment Modal with Reason */}
+      <Modal opened={endModalOpen} onClose={() => setEndModalOpen(false)} title="End Teacher Assignment" size="md">
+        <Text size="sm" mb="md">
+          Are you sure you want to end the assignment for <strong>{endingAssignment?.teacherName}</strong> in Period {endingAssignment?.period}?
+        </Text>
+        <Textarea
+          label="Reason for leaving/changing"
+          placeholder="e.g., Resigned, Transferred, Schedule change, etc."
+          value={endReason}
+          onChange={(e) => setEndReason(e.currentTarget.value)}
+          minRows={3}
+          autosize
         />
         <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={() => setEditingSection(null)}>Cancel</Button>
-          <Button onClick={() => updateSectionMutation.mutate({ id: editingSection!.id, name: editingSection!.name })}>Save</Button>
+          <Button variant="default" onClick={() => setEndModalOpen(false)}>Cancel</Button>
+          <Button color="red" onClick={() => endMutation.mutate()}>End Assignment</Button>
+        </Group>
+      </Modal>
+
+      {/* History Modal */}
+      <Modal opened={historyModalOpen} onClose={() => setHistoryModalOpen(false)} title={`Period ${selectedPeriod} - Assignment History`} size="lg">
+        {periodHistory.length === 0 ? (
+          <Text c="dimmed" ta="center">No history for this period.</Text>
+        ) : (
+          <Table striped>
+            <thead>
+              <tr>
+                <th>Teacher</th>
+                <th>Subject</th>
+                <th>Days</th>
+                <th>Assigned Date</th>
+                <th>End Date</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periodHistory.map((history, idx) => {
+                // Safely extract teacher name from history
+                let teacherName = 'Unknown';
+                if (history.teacherId) {
+                  if (typeof history.teacherId === 'object') {
+                    teacherName = history.teacherId.name || 'Unknown';
+                  } else if (typeof history.teacherId === 'string') {
+                    const teacher = teachers?.find(t => t._id === history.teacherId);
+                    teacherName = teacher?.name || 'Unknown';
+                  }
+                }
+                
+                // Safely extract subject name from history
+                let subjectName = 'Unknown';
+                if (history.subjectId) {
+                  if (typeof history.subjectId === 'object') {
+                    subjectName = history.subjectId.name || 'Unknown';
+                  } else if (typeof history.subjectId === 'string') {
+                    const subject = subjects?.find(s => s._id === history.subjectId);
+                    subjectName = subject?.name || 'Unknown';
+                  }
+                }
+                
+                return (
+                  <tr key={idx}>
+                    <td>{teacherName}</td>
+                    <td>{subjectName}</td>
+                    <td>{history.days?.map((d: string) => DAY_MAP[d]).join(', ') || '—'}</td>
+                    <td>{new Date(history.assignedDate).toLocaleDateString()}</td>
+                    <td>{history.endDate ? new Date(history.endDate).toLocaleDateString() : 'Current'}</td>
+                    <td>{history.reason || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        )}
+        <Group justify="flex-end" mt="md">
+          <Button variant="default" onClick={() => setHistoryModalOpen(false)}>Close</Button>
         </Group>
       </Modal>
     </Stack>

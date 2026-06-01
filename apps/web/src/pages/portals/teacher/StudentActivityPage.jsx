@@ -8,7 +8,7 @@ import {
 } from '@mantine/core';
 import { IconRefresh, IconSettings, IconDeviceFloppy, IconSearch, IconCalendar, IconBook, IconUser, IconSchool } from '@tabler/icons-react';
 import { createColumnHelper, useReactTable, getCoreRowModel, getPaginationRowModel, getFilteredRowModel } from '@tanstack/react-table';
-import { api } from '../../lib/api';
+import { api } from '../../../lib/api';
 import { notifications } from '@mantine/notifications';
 import { motion } from 'framer-motion';
 
@@ -27,13 +27,8 @@ const CLASSWORK_OPTIONS = [
   { value: 'not_submitted', label: '📤 Not Submitted', rating: 0 },
 ];
 
-const HOMEWORK_ISSUES = [
-  'Forgot at home', 'Not completed', 'No notebook', 'Was absent', 'Other'
-];
-
-const CLASSWORK_ISSUES = [
-  'Not done in class', 'Was absent', 'No understanding', 'Left early', 'Other'
-];
+const HOMEWORK_ISSUES = ['Forgot at home', 'Not completed', 'No notebook', 'Was absent', 'Other'];
+const CLASSWORK_ISSUES = ['Not done in class', 'Was absent', 'No understanding', 'Left early', 'Other'];
 
 const DISCIPLINE_OPTIONS = [
   { value: 'good', label: '😊 Good', rating: 4 },
@@ -41,9 +36,7 @@ const DISCIPLINE_OPTIONS = [
   { value: 'bad', label: '🔴 Bad', rating: 0 },
 ];
 
-const DISCIPLINE_ISSUES = [
-  'Talking', 'Using phone', 'Disrespectful', 'Late arrival', 'Other'
-];
+const DISCIPLINE_ISSUES = ['Talking', 'Using phone', 'Disrespectful', 'Late arrival', 'Other'];
 
 const HEALTH_OPTIONS = [
   { value: 'good', label: '😊 Good' },
@@ -52,9 +45,7 @@ const HEALTH_OPTIONS = [
   { value: 'serious', label: '⚠️ Serious' },
 ];
 
-const HEALTH_PROBLEMS = [
-  'Headache', 'Fever', 'Stomach ache', 'Dizziness', 'Injury', 'Other'
-];
+const HEALTH_PROBLEMS = ['Headache', 'Fever', 'Stomach ache', 'Dizziness', 'Injury', 'Other'];
 
 const PRACTICAL_OPTIONS = [
   { value: 'complete', label: '✅ Complete', rating: 4 },
@@ -79,6 +70,7 @@ const WRITING_OPTIONS = [
   { value: 'not_done', label: '❌ Not Done', rating: 0 },
 ];
 
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const DAY_SHORT = { M: 'Mon', T: 'Tue', W: 'Wed', Th: 'Thu', F: 'Fri' };
 
 const ALL_COLUMNS = [
@@ -118,37 +110,6 @@ const calculateAverage = (row) => {
   return Math.round((sum / ratings.length) * 10) / 10;
 };
 
-const RemarksCell = React.memo(({ value, onChange }) => {
-  const [localValue, setLocalValue] = useState(value);
-  const timeoutRef = useRef(null);
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  const handleChange = (newValue) => {
-    setLocalValue(newValue);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      onChange(newValue);
-    }, 500);
-  };
-
-  return (
-    <Textarea
-      value={localValue}
-      onChange={(e) => handleChange(e.currentTarget.value)}
-      size="xs"
-      placeholder="Remarks..."
-      autosize
-      minRows={1}
-      maxRows={3}
-    />
-  );
-});
-
-RemarksCell.displayName = 'RemarksCell';
-
 export function StudentActivityPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -176,7 +137,6 @@ export function StudentActivityPage() {
   const [teacherAssignments, setTeacherAssignments] = useState([]);
 
   const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'short' }).charAt(0);
-  const dayOfWeek = selectedDate.toLocaleDateString('en-US', { weekday: 'long' });
 
   // Fetch teacher's assigned sections
   const { data: assignedSections, isLoading: scheduleLoading } = useQuery({
@@ -214,12 +174,10 @@ export function StudentActivityPage() {
       });
       setTeacherAssignments(assignments);
       
-      // Auto-select first assignment if none selected
       if (!selectedClassId && assignments.length > 0) {
-        const first = assignments[0];
-        setSelectedClassId(first.classId);
-        setSelectedSection(first.sectionName);
-        setActivePeriod(first.period);
+        setSelectedClassId(assignments[0].classId);
+        setSelectedSection(assignments[0].sectionName);
+        setActivePeriod(assignments[0].period);
       }
     }
   }, [assignedSections, user.teacherId]);
@@ -413,8 +371,8 @@ export function StudentActivityPage() {
     );
   };
 
+  const dayOfWeek = selectedDate.toLocaleDateString('en-US', { weekday: 'long' });
   const currentAssignment = teacherAssignments.find(a => a.period === activePeriod && a.classId === selectedClassId);
-  const todaySchedule = teacherAssignments.filter(a => a.days.includes(currentDay)).sort((a, b) => a.period - b.period);
 
   const columnHelper = createColumnHelper();
   const columns = useMemo(() => {
@@ -491,7 +449,7 @@ export function StudentActivityPage() {
         header: 'Remarks',
         size: 200,
         cell: ({ row }) => (
-          <RemarksCell value={row.original.remarks} onChange={(val) => updateRemarks(row.original.studentId, val)} />
+          <Textarea value={row.original.remarks} onChange={(e) => updateRemarks(row.original.studentId, e.currentTarget.value)} size="xs" placeholder="Remarks..." autosize minRows={1} maxRows={2} />
         ),
       }));
     }
@@ -517,6 +475,8 @@ export function StudentActivityPage() {
   }, [activityData, globalFilter]);
 
   if (scheduleLoading) return <Loader />;
+
+  const todaySchedule = teacherAssignments.filter(a => a.days.includes(currentDay)).sort((a, b) => a.period - b.period);
 
   return (
     <Stack p="md" gap="lg">
