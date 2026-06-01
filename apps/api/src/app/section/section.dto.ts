@@ -65,7 +65,7 @@ export class AssignPeriodTeacherDto {
 
   @IsArray()
   @IsEnum(['M', 'T', 'W', 'Th', 'F'], { each: true })
-  days: WeekDays[];
+  days: string[];
 
   @IsOptional()
   @Type(() => Date)

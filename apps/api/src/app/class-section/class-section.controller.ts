@@ -102,4 +102,5 @@ export class ClassSectionController {
   ) {
     return this.classSectionService.getCurrentTeachers(id, sectionIndex, date ? new Date(date) : new Date());
   }
+
 }

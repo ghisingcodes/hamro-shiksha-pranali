@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Select, Button, Group, Title, Stack, Loader, Alert, Badge, 
-  Table, ActionIcon, Tooltip, Modal, TextInput, 
-  MultiSelect, Divider, Checkbox, Paper, Text
+  Table, ActionIcon, Tooltip, Modal, TextInput, Textarea,
+  MultiSelect, Divider, Paper, Text, ThemeIcon, Card, SimpleGrid, Box,
+  Checkbox
 } from '@mantine/core';
-import { IconHistory, IconRefresh } from '@tabler/icons-react';
+import { IconHistory, IconRefresh, IconUser, IconBook, IconCalendar, IconPlus, IconTrash, IconEdit } from '@tabler/icons-react';
 import { api } from '../../../lib/api';
 import { notifications } from '@mantine/notifications';
 
@@ -18,10 +19,20 @@ const DAY_OPTIONS = [
 ];
 
 const DAY_PRESETS = [
-  { label: 'All Days', value: ['M', 'T', 'W', 'Th', 'F'] },
-  { label: 'Mon, Wed, Fri', value: ['M', 'W', 'F'] },
-  { label: 'Tue, Thu', value: ['T', 'Th'] },
+  { label: 'All Week', value: ['M', 'T', 'W', 'Th', 'F'], icon: '📅' },
+  { label: 'Mon, Wed, Fri', value: ['M', 'W', 'F'], icon: '📆' },
+  { label: 'Tue, Thu', value: ['T', 'Th'], icon: '📖' },
+  { label: 'Mon, Tue, Wed', value: ['M', 'T', 'W'], icon: '📘' },
+  { label: 'Wed, Thu, Fri', value: ['W', 'Th', 'F'], icon: '📙' },
+  { label: 'Mon, Tue', value: ['M', 'T'], icon: '📗' },
+  { label: 'Thu, Fri', value: ['Th', 'F'], icon: '📕' },
+  { label: 'Only Monday', value: ['M'], icon: '🔵' },
+  { label: 'Only Friday', value: ['F'], icon: '🔴' },
 ];
+
+const DAY_MAP: Record<string, string> = {
+  M: 'Mon', T: 'Tue', W: 'Wed', Th: 'Thu', F: 'Fri'
+};
 
 export function RoutineTab() {
   const queryClient = useQueryClient();
@@ -31,6 +42,10 @@ export function RoutineTab() {
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [endModalOpen, setEndModalOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<any>(null);
+  const [endingAssignment, setEndingAssignment] = useState<{ period: number; teacherId: string; teacherName: string } | null>(null);
+  const [endReason, setEndReason] = useState('');
   const [assignForm, setAssignForm] = useState({ 
     teacherId: '', 
     subjectId: '', 
@@ -63,7 +78,7 @@ export function RoutineTab() {
     enabled: !!schoolId,
   });
 
-  // Fetch subjects filtered by season AND class
+  // Fetch subjects
   const { data: subjects } = useQuery({
     queryKey: ['subjects', selectedSeasonId, selectedClassId, schoolId],
     queryFn: async () => {
@@ -107,68 +122,87 @@ export function RoutineTab() {
   const selectedClass = classes?.find(c => c._id === selectedClassId);
   const periodCount = selectedClass?.periodCount || 7;
 
-  // Assign teacher mutation
+  // Get all assignments for a period
+  const getAssignments = (period: number) => {
+    const periodTeachers = section?.periodTeachers;
+    if (!periodTeachers) return [];
+    const assignments = periodTeachers[period] || [];
+    return assignments.filter((a: any) => !a.endDate);
+  };
+
+  // Check if a teacher covers all days
+  const coversAllDays = (days: string[]) => days.length === 5 && days.includes('M') && days.includes('T') && days.includes('W') && days.includes('Th') && days.includes('F');
+
+  // Assign/Update teacher mutation
   const assignMutation = useMutation({
     mutationFn: async () => {
-      const daysToSend = assignForm.allDays ? ['M', 'T', 'W', 'Th', 'F'] : assignForm.days;
-      return api.post(`/sections/${selectedSectionId}/assign-period-teacher`, {
+      let daysToSend = assignForm.allDays ? ['M', 'T', 'W', 'Th', 'F'] : assignForm.days;
+      if (daysToSend.length === 0) daysToSend = assignForm.days;
+      
+      const payload = {
         period: selectedPeriod,
         teacherId: assignForm.teacherId,
         subjectId: assignForm.subjectId,
         days: daysToSend,
-        assignedDate: new Date(),
-      }, { 
-        headers: { 'X-School-Id': schoolId } 
-      });
+        assignedDate: new Date().toISOString(),
+      };
+      const response = await api.post(
+        `/sections/${selectedSectionId}/assign-period-teacher`, 
+        payload,
+        { headers: { 'X-School-Id': schoolId } }
+      );
+      return response.data;
     },
     onSuccess: () => {
       refetchSection();
+      refetchSections();
       setAssignModalOpen(false);
+      setEditingAssignment(null);
       setAssignForm({ teacherId: '', subjectId: '', days: [], allDays: false });
-      notifications.show({ title: 'Success', message: 'Teacher assigned', color: 'green' });
+      notifications.show({ title: 'Success', message: 'Teacher assigned successfully', color: 'green' });
     },
     onError: (err: any) => {
-      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to assign', color: 'red' });
+      notifications.show({ 
+        title: 'Error', 
+        message: err.response?.data?.message || 'Failed to assign teacher', 
+        color: 'red' 
+      });
     },
   });
 
-  // End assignment mutation
+  // End assignment mutation with reason
   const endMutation = useMutation({
-    mutationFn: async ({ period, teacherId }: { period: number; teacherId: string }) => {
-      return api.post(`/sections/${selectedSectionId}/end-period-teacher`, {
-        period,
-        teacherId,
-        endDate: new Date(),
-      }, { 
+    mutationFn: async () => {
+      if (!endingAssignment) return;
+      const payload = { 
+        period: endingAssignment.period, 
+        teacherId: endingAssignment.teacherId, 
+        endDate: new Date().toISOString(), 
+        reason: endReason || 'Assignment ended by admin'
+      };
+      return api.post(`/sections/${selectedSectionId}/end-period-teacher`, payload, { 
         headers: { 'X-School-Id': schoolId } 
       });
     },
     onSuccess: () => {
       refetchSection();
+      refetchSections();
+      setEndModalOpen(false);
+      setEndingAssignment(null);
+      setEndReason('');
       notifications.show({ title: 'Success', message: 'Assignment ended', color: 'green' });
+    },
+    onError: (err: any) => {
+      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to end assignment', color: 'red' });
     },
   });
 
-  // Get current assignment for a period
-  const getAssignment = (period: number) => {
-    const periodTeachers = section?.periodTeachers;
-    if (!periodTeachers) return null;
-    const assignments = periodTeachers[period] || [];
-    const active = assignments.find((a: any) => !a.endDate);
-    if (!active) return null;
-    const teacher = teachers?.find(t => t._id === active.teacherId);
-    const subject = subjects?.find(s => s._id === active.subjectId);
-    return { teacher, subject, days: active.days, teacherId: active.teacherId, subjectId: active.subjectId };
-  };
-
-  // Get history for a period
   const getPeriodHistory = (period: number) => {
     const periodTeachers = section?.periodTeachers;
     if (!periodTeachers) return [];
     return periodTeachers[period] || [];
   };
 
-  // Get class teacher info
   const classTeacher = {
     teacher: teachers?.find(t => t._id === section?.currentClassTeacherId)?.name || 'Not assigned',
     subject: subjects?.find(s => s._id === section?.currentClassTeacherSubjectId)?.name || 'Not assigned',
@@ -178,6 +212,24 @@ export function RoutineTab() {
     setSelectedPeriod(period);
     setPeriodHistory(getPeriodHistory(period));
     setHistoryModalOpen(true);
+  };
+
+  const handleEditAssignment = (period: number, assignment: any) => {
+    setEditingAssignment(assignment);
+    setSelectedPeriod(period);
+    setAssignForm({
+      teacherId: assignment.teacherId,
+      subjectId: assignment.subjectId,
+      days: assignment.days,
+      allDays: coversAllDays(assignment.days),
+    });
+    setAssignModalOpen(true);
+  };
+
+  const handleEndAssignment = (period: number, teacherId: string, teacherName: string) => {
+    setEndingAssignment({ period, teacherId, teacherName });
+    setEndReason('');
+    setEndModalOpen(true);
   };
 
   const handleClassChange = (val: string | null) => {
@@ -195,150 +247,167 @@ export function RoutineTab() {
     setSelectedSectionId(val || '');
   };
 
-  // Refresh data when dependencies change
   const handleRefresh = () => {
     if (selectedSectionId) refetchSection();
     if (selectedClassId && selectedSeasonId) refetchSections();
   };
 
   return (
-    <Stack>
-      <Group grow>
-        <Select
-          label="Academic Season"
-          placeholder="Select season"
-          data={seasons?.map(s => ({ value: s._id, label: s.name })) || []}
-          value={selectedSeasonId}
-          onChange={handleSeasonChange}
-        />
-        <Select
-          label="Class"
-          placeholder="Select class"
-          data={classes?.map(c => ({ value: c._id, label: c.displayName })) || []}
-          value={selectedClassId}
-          onChange={handleClassChange}
-          disabled={!selectedSeasonId}
-        />
-        <Select
-          label="Section"
-          placeholder="Select section"
-          data={sections?.map(s => ({ value: s._id, label: s.name })) || []}
-          value={selectedSectionId}
-          onChange={handleSectionChange}
-          disabled={!selectedClassId}
-        />
-        <Button 
-          variant="subtle" 
-          onClick={handleRefresh} 
-          disabled={!selectedSectionId}
-          leftSection={<IconRefresh size={16} />}
-        >
-          Refresh
-        </Button>
-      </Group>
+    <Stack gap="xl">
+      {/* Filters Section */}
+      <Paper withBorder shadow="sm" radius="md" p="lg">
+        <Group grow align="flex-end">
+          <Select
+            label="Academic Season"
+            placeholder="Select season"
+            data={seasons?.map(s => ({ value: s._id, label: s.name })) || []}
+            value={selectedSeasonId}
+            onChange={handleSeasonChange}
+            leftSection={<IconCalendar size={16} />}
+          />
+          <Select
+            label="Class"
+            placeholder="Select class"
+            data={classes?.map(c => ({ value: c._id, label: c.displayName })) || []}
+            value={selectedClassId}
+            onChange={handleClassChange}
+            disabled={!selectedSeasonId}
+            leftSection={<IconBook size={16} />}
+          />
+          <Select
+            label="Section"
+            placeholder="Select section"
+            data={sections?.map(s => ({ value: s._id, label: s.name })) || []}
+            value={selectedSectionId}
+            onChange={handleSectionChange}
+            disabled={!selectedClassId}
+            leftSection={<IconUser size={16} />}
+          />
+          <Button variant="light" onClick={handleRefresh} disabled={!selectedSectionId} leftSection={<IconRefresh size={16} />}>
+            Refresh
+          </Button>
+        </Group>
+      </Paper>
 
       {selectedSectionId && section && (
         <>
-          <Alert color="blue" variant="light">
+          {/* Class Teacher Info */}
+          <Paper withBorder shadow="sm" radius="md" p="lg" bg="blue.0">
             <Group justify="space-between">
-              <div>
-                <Text fw={600}>Class Teacher:</Text>
-                <Text>{classTeacher.teacher} - {classTeacher.subject}</Text>
-              </div>
-              <Badge size="lg">Periods: {periodCount}</Badge>
+              <Group>
+                <ThemeIcon size="lg" color="blue" variant="light" radius="xl"><IconUser size={20} /></ThemeIcon>
+                <div>
+                  <Text size="xs" c="dimmed">👩‍🏫 Class Teacher (Auto from Period 1)</Text>
+                  <Text fw={700} size="lg">{classTeacher.teacher}</Text>
+                  <Text size="sm" c="dimmed">{classTeacher.subject}</Text>
+                </div>
+              </Group>
+              <Badge size="lg" color="blue" variant="light">{periodCount} Periods per Day</Badge>
             </Group>
-          </Alert>
+          </Paper>
 
-          <div style={{ overflowX: 'auto' }}>
-            <Table striped highlightOnHover>
+          {/* Period-wise Multi-Teacher Table */}
+          <Box style={{ overflowX: 'auto' }}>
+            <Table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead>
-                <tr>
-                  <th>Period</th>
-                  <th>Subject</th>
-                  <th>Teacher</th>
-                  <th>Days</th>
-                  <th>Actions</th>
+                <tr style={{ background: '#f8f9fa' }}>
+                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'left', width: '140px' }}>Period</th>
+                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'left' }}>Teachers & Subjects</th>
+                  <th style={{ padding: '12px 16px', borderBottom: '2px solid #e9ecef', textAlign: 'center', width: '140px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {Array.from({ length: periodCount }).map((_, idx) => {
-                  const period = idx + 1;
-                  const assignment = getAssignment(period);
+                {Array.from({ length: periodCount }).map((_, periodIdx) => {
+                  const period = periodIdx + 1;
+                  const assignments = getAssignments(period);
+                  
                   return (
-                    <tr key={period}>
-                      <td style={{ fontWeight: 'bold' }}>Period {period}</td>
-                      <td>{assignment?.subject?.name || '—'}</td>
-                      <td>{assignment?.teacher?.name || '—'}</td>
-                      <td>{assignment?.days?.join(', ') || '—'}</td>
-                      <td>
-                        <Group gap="xs">
-                          <Button
-                            size="xs"
-                            variant="light"
-                            onClick={() => {
-                              setSelectedPeriod(period);
-                              setAssignForm({
-                                teacherId: assignment?.teacherId || '',
-                                subjectId: assignment?.subjectId || '',
-                                days: assignment?.days || [],
-                                allDays: assignment?.days?.length === 5,
-                              });
-                              setAssignModalOpen(true);
-                            }}
-                          >
-                            {assignment ? 'Change' : 'Assign'}
-                          </Button>
-                          {assignment && (
-                            <Button
-                              size="xs"
-                              variant="subtle"
-                              color="red"
-                              onClick={() => endMutation.mutate({ period, teacherId: assignment.teacherId })}
-                            >
-                              End
-                            </Button>
+                    <tr key={period} style={{ borderBottom: '1px solid #e9ecef' }}>
+                      <td style={{ padding: '12px 16px', fontWeight: 600, background: '#f8f9fa', verticalAlign: 'top' }}>
+                        <div>
+                          Period {period}
+                          {period === 1 && (
+                            <Badge size="sm" color="green" fullWidth mt={4} style={{ display: 'block', textAlign: 'center' }}>
+                              Class Teacher
+                            </Badge>
                           )}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 16px', verticalAlign: 'top' }}>
+                        {assignments.length === 0 ? (
+                          <Text size="sm" c="dimmed" fs="italic">— No teachers assigned —</Text>
+                        ) : (
+                          <Stack gap="xs">
+                            {assignments.map((assignment: any, idx: number) => {
+                              const teacher = teachers?.find(t => t._id === assignment.teacherId);
+                              const subject = subjects?.find(s => s._id === assignment.subjectId);
+                              const daysStr = assignment.days.map((d: string) => DAY_MAP[d]).join(', ');
+                              const isFullWeek = coversAllDays(assignment.days);
+                              
+                              return (
+                                <Card key={idx} withBorder p="xs" radius="md" style={{ background: '#fafafa' }}>
+                                  <Group justify="space-between" wrap="nowrap">
+                                    <div style={{ flex: 1 }}>
+                                      <Group gap="xs" wrap="wrap">
+                                        <Badge color="blue" variant="light">{subject?.name || 'Unknown'}</Badge>
+                                        <Text size="sm" fw={500}>{teacher?.name || 'Unknown'}</Text>
+                                        {isFullWeek ? (
+                                          <Badge size="xs" color="green">📅 All Days</Badge>
+                                        ) : (
+                                          <Badge size="xs" color="gray" variant="outline">📅 {daysStr}</Badge>
+                                        )}
+                                      </Group>
+                                    </div>
+                                    <Group gap={4}>
+                                      <Tooltip label="Edit Assignment">
+                                        <ActionIcon size="sm" color="blue" variant="subtle" onClick={() => handleEditAssignment(period, assignment)}>
+                                          <IconEdit size={14} />
+                                        </ActionIcon>
+                                      </Tooltip>
+                                      <Tooltip label="End Assignment">
+                                        <ActionIcon size="sm" color="red" variant="subtle" onClick={() => handleEndAssignment(period, assignment.teacherId, teacher?.name || 'Unknown')}>
+                                          <IconTrash size={14} />
+                                        </ActionIcon>
+                                      </Tooltip>
+                                    </Group>
+                                  </Group>
+                                </Card>
+                              );
+                            })}
+                          </Stack>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 16px', textAlign: 'center', verticalAlign: 'top' }}>
+                        <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => {
+                          setSelectedPeriod(period);
+                          setEditingAssignment(null);
+                          setAssignForm({ teacherId: '', subjectId: '', days: [], allDays: false });
+                          setAssignModalOpen(true);
+                        }}>
+                          Add Teacher
+                        </Button>
+                        {assignments.length > 0 && (
                           <Tooltip label="History">
-                            <ActionIcon size="sm" onClick={() => handleViewHistory(period)}>
-                              <IconHistory size={16} />
-                            </ActionIcon>
+                            <ActionIcon size="sm" ml="xs" onClick={() => handleViewHistory(period)}><IconHistory size={16} /></ActionIcon>
                           </Tooltip>
-                        </Group>
+                        )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </Table>
-          </div>
+          </Box>
         </>
       )}
 
-      {selectedClassId && selectedSeasonId && !selectedSectionId && (
-        <Alert color="blue" variant="light">
-          Please select a section to view and manage routine.
-        </Alert>
-      )}
+      {/* No Selection States */}
+      {selectedClassId && selectedSeasonId && !selectedSectionId && <Alert color="blue" variant="light">Please select a section to view and manage routine.</Alert>}
+      {!selectedClassId && selectedSeasonId && <Alert color="blue" variant="light">Please select a class to continue.</Alert>}
+      {!selectedSeasonId && <Alert color="blue" variant="light">Please select an academic season first.</Alert>}
 
-      {!selectedClassId && selectedSeasonId && (
-        <Alert color="blue" variant="light">
-          Please select a class to continue.
-        </Alert>
-      )}
-
-      {!selectedSeasonId && (
-        <Alert color="blue" variant="light">
-          Please select an academic season first.
-        </Alert>
-      )}
-
-      {/* Assign Teacher Modal */}
-      <Modal
-        opened={assignModalOpen}
-        onClose={() => setAssignModalOpen(false)}
-        title={`Assign Teacher - Period ${selectedPeriod}`}
-        size="md"
-      >
+      {/* Assign/Edit Teacher Modal */}
+      <Modal opened={assignModalOpen} onClose={() => setAssignModalOpen(false)} title={`${editingAssignment ? 'Edit' : 'Add'} Teacher - Period ${selectedPeriod}`} size="lg">
         <Select
           label="Teacher"
           placeholder="Select teacher"
@@ -354,46 +423,44 @@ export function RoutineTab() {
           data={subjects?.map(s => ({ value: s._id, label: s.name })) || []}
           value={assignForm.subjectId}
           onChange={(val) => setAssignForm({ ...assignForm, subjectId: val || '' })}
-          disabled={!assignForm.teacherId}
           searchable
           required
           mt="md"
         />
-        {subjects?.length === 0 && assignForm.teacherId && (
-          <Alert color="yellow" mt="md" size="xs">
-            No subjects found for this class. Please add subjects in the Subjects tab first.
-          </Alert>
-        )}
-        <Divider label="Days" my="md" />
-        <Group justify="center" gap="xs">
+        
+        <Divider label="Select Days" my="md" />
+        
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs" mb="md">
           {DAY_PRESETS.map(preset => (
             <Button
               key={preset.label}
               size="xs"
-              variant="outline"
+              variant={assignForm.days.length === preset.value.length && assignForm.days.every(d => preset.value.includes(d)) ? "filled" : "outline"}
               onClick={() => setAssignForm({ 
                 ...assignForm, 
                 days: preset.value, 
                 allDays: preset.value.length === 5 
               })}
             >
-              {preset.label}
+              {preset.icon} {preset.label}
             </Button>
           ))}
-        </Group>
+        </SimpleGrid>
+
         <Checkbox
           label="All Days (Monday to Friday)"
           checked={assignForm.allDays}
           onChange={(e) => setAssignForm({ 
             ...assignForm, 
             allDays: e.currentTarget.checked, 
-            days: [] 
+            days: e.currentTarget.checked ? ['M', 'T', 'W', 'Th', 'F'] : [] 
           })}
           mt="md"
         />
+        
         {!assignForm.allDays && (
           <MultiSelect
-            label="Select Specific Days"
+            label="Or Select Specific Days"
             placeholder="Select days"
             data={DAY_OPTIONS}
             value={assignForm.days}
@@ -402,27 +469,40 @@ export function RoutineTab() {
             required
           />
         )}
+        
         <Group justify="flex-end" mt="md">
-          <Button 
-            onClick={() => assignMutation.mutate()} 
-            disabled={!assignForm.teacherId || (!assignForm.allDays && assignForm.days.length === 0)}
-          >
-            Assign Teacher
+          <Button variant="default" onClick={() => setAssignModalOpen(false)}>Cancel</Button>
+          <Button onClick={() => assignMutation.mutate()} disabled={!assignForm.teacherId || (!assignForm.allDays && assignForm.days.length === 0)}>
+            {editingAssignment ? 'Update Assignment' : 'Assign Teacher'}
           </Button>
         </Group>
       </Modal>
 
+      {/* End Assignment Modal with Reason */}
+      <Modal opened={endModalOpen} onClose={() => setEndModalOpen(false)} title="End Teacher Assignment" size="md">
+        <Text size="sm" mb="md">
+          Are you sure you want to end the assignment for <strong>{endingAssignment?.teacherName}</strong> in Period {endingAssignment?.period}?
+        </Text>
+        <Textarea
+          label="Reason for leaving/changing"
+          placeholder="e.g., Resigned, Transferred, Schedule change, etc."
+          value={endReason}
+          onChange={(e) => setEndReason(e.currentTarget.value)}
+          minRows={3}
+          autosize
+        />
+        <Group justify="flex-end" mt="md">
+          <Button variant="default" onClick={() => setEndModalOpen(false)}>Cancel</Button>
+          <Button color="red" onClick={() => endMutation.mutate()}>End Assignment</Button>
+        </Group>
+      </Modal>
+
       {/* History Modal */}
-      <Modal
-        opened={historyModalOpen}
-        onClose={() => setHistoryModalOpen(false)}
-        title={`Period ${selectedPeriod} - Assignment History`}
-        size="lg"
-      >
+      <Modal opened={historyModalOpen} onClose={() => setHistoryModalOpen(false)} title={`Period ${selectedPeriod} - Assignment History`} size="lg">
         {periodHistory.length === 0 ? (
           <Text c="dimmed" ta="center">No history for this period.</Text>
         ) : (
-          <Table striped highlightOnHover>
+          <Table striped>
             <thead>
               <tr>
                 <th>Teacher</th>
@@ -441,7 +521,7 @@ export function RoutineTab() {
                   <tr key={idx}>
                     <td>{teacher?.name || 'Unknown'}</td>
                     <td>{subject?.name || 'Unknown'}</td>
-                    <td>{history.days?.join(', ') || '—'}</td>
+                    <td>{history.days?.map((d: string) => DAY_MAP[d]).join(', ') || '—'}</td>
                     <td>{new Date(history.assignedDate).toLocaleDateString()}</td>
                     <td>{history.endDate ? new Date(history.endDate).toLocaleDateString() : 'Current'}</td>
                     <td>{history.reason || '—'}</td>

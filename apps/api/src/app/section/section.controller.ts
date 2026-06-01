@@ -61,13 +61,26 @@ export class SectionController {
     return this.sectionService.endClassTeacher(id, dto);
   }
 
-  @Post(':id/assign-period-teacher')
-  assignPeriodTeacher(@Param('id') id: string, @Body() dto: AssignPeriodTeacherDto) {
-    return this.sectionService.assignPeriodTeacher(id, dto);
+@Post(':id/assign-period-teacher')
+async assignPeriodTeacher(@Param('id') id: string, @Body() dto: AssignPeriodTeacherDto) {
+  console.log('=== assignPeriodTeacher called ===');
+  console.log('Section ID:', id);
+  console.log('DTO:', JSON.stringify(dto, null, 2));
+  
+  try {
+    const result = await this.sectionService.assignPeriodTeacher(id, dto);
+    console.log('Assignment successful:', result);
+    return result;
+  } catch (error) {
+    console.error('Error in assignPeriodTeacher controller:', error);
+    console.error('Error stack:', error.stack);
+    throw error;
   }
+}
 
   @Post(':id/end-period-teacher')
-  endPeriodTeacher(@Param('id') id: string, @Body() dto: EndTeacherAssignmentDto) {
-    return this.sectionService.endPeriodTeacher(id, dto);
-  }
+async endPeriodTeacher(@Param('id') id: string, @Body() dto: EndTeacherAssignmentDto) {
+  console.log('Ending period teacher assignment:', dto);
+  return this.sectionService.endPeriodTeacher(id, dto);
+}
 }

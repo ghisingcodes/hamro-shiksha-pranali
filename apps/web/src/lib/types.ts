@@ -72,6 +72,8 @@ export interface SectionDocument {
   updatedAt: string;
 }
 
+
+
 // ==================== Student Types ====================
 export interface Parent {
   id?: string;

@@ -3,6 +3,46 @@ import { Document, Types } from 'mongoose';
 
 export type WeekDays = 'M' | 'T' | 'W' | 'Th' | 'F';
 
+// Define sub-schemas for better compatibility
+@Schema({ _id: false })
+class ClassTeacherHistoryEntry {
+  @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
+  teacherId: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Subject', required: true })
+  subjectId: Types.ObjectId;
+
+  @Prop({ type: Date, default: Date.now })
+  assignedDate: Date;
+
+  @Prop({ type: Date, default: null })
+  endDate: Date | null;
+
+  @Prop({ type: String, default: '' })
+  reason: string;
+}
+
+@Schema({ _id: false })
+class PeriodTeacherEntry {
+  @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
+  teacherId: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Subject', required: true })
+  subjectId: Types.ObjectId;
+
+  @Prop({ type: [String], enum: ['M', 'T', 'W', 'Th', 'F'], required: true })
+  days: WeekDays[];
+
+  @Prop({ type: Date, default: Date.now })
+  assignedDate: Date;
+
+  @Prop({ type: Date, default: null })
+  endDate: Date | null;
+
+  @Prop({ type: String, default: '' })
+  reason: string;
+}
+
 @Schema({ timestamps: true })
 export class Section extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Class', required: true })
@@ -23,37 +63,12 @@ export class Section extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Subject' })
   currentClassTeacherSubjectId?: Types.ObjectId;
 
-  @Prop({ type: [{
-    teacherId: { type: Types.ObjectId, ref: 'Teacher', required: true },
-    subjectId: { type: Types.ObjectId, ref: 'Subject', required: true },
-    assignedDate: { type: Date, default: Date.now },
-    endDate: { type: Date, default: null },
-    reason: { type: String, default: '' },
-  }], default: [] })
-  classTeacherHistory: Array<{
-    teacherId: Types.ObjectId;
-    subjectId: Types.ObjectId;
-    assignedDate: Date;
-    endDate: Date | null;
-    reason: string;
-  }>;
+  @Prop({ type: [ClassTeacherHistoryEntry], default: [] })
+  classTeacherHistory: ClassTeacherHistoryEntry[];
 
-  @Prop({ type: Map, of: [{
-    teacherId: { type: Types.ObjectId, ref: 'Teacher', required: true },
-    subjectId: { type: Types.ObjectId, ref: 'Subject', required: true },
-    days: { type: [String], enum: ['M', 'T', 'W', 'Th', 'F'], required: true },
-    assignedDate: { type: Date, default: Date.now },
-    endDate: { type: Date, default: null },
-    reason: { type: String, default: '' },
-  }], default: new Map() })
-  periodTeachers: Map<number, {
-    teacherId: Types.ObjectId;
-    subjectId: Types.ObjectId;
-    days: WeekDays[];
-    assignedDate: Date;
-    endDate: Date | null;
-    reason: string;
-  }[]>;
+  // Use a plain object for period teachers instead of Map
+  @Prop({ type: Object, default: {} })
+  periodTeachers: Record<number, PeriodTeacherEntry[]>;
 
   @Prop({ default: true })
   isActive: boolean;
